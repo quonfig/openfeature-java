@@ -23,7 +23,7 @@ java {
 
 dependencies {
     api("dev.openfeature:sdk:1.20.2")
-    implementation("com.quonfig:sdk-java:0.0.2")
+    implementation("com.quonfig:sdk-java:0.0.4")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))

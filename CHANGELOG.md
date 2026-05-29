@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.2 - 2026-05-29
+
+Bump the native SDK dependency from `com.quonfig:sdk-java:0.0.2` to `0.0.4`
+(qfg-zinv).
+
+- **Fix: per-environment overrides are now honored in delivery (SdkKey) mode.**
+  Provider 0.0.1 depended on sdk-java 0.0.2, which predated the
+  environment-override fix shipped in sdk-java 0.0.4 (qfg-xpln/qfg-pinh): the
+  client parsed only the base `default` block of the delivery-wire payload and
+  ignored the environment-specific override (`meta.environment` is now
+  authoritative). Consumers building the provider from an SdkKey now resolve the
+  environment override correctly.
+- No provider source changes — the fix rides entirely in the bumped sdk-java
+  dependency.
+- Reason/variant labels for single ALWAYS_TRUE-criterion configs follow
+  sdk-java's canonical STATIC/SPLIT semantics (qfg-q7yz): reason `STATIC`,
+  variant `static` (previously `TARGETING_MATCH` / `targeting:0`). Resolved
+  values are unchanged.
+
 ## 0.0.1 - 2026-05-28
 
 First release of the OpenFeature provider for the Quonfig Java SDK

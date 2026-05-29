@@ -94,10 +94,10 @@ class QuonfigProviderTest {
 
     ProviderEvaluation<Boolean> b = provider.getBooleanEvaluation("always.true", false, null);
     assertTrue(b.getValue());
-    // The Java SDK reports TARGETING_MATCH for an ALWAYS_TRUE-criterion rule (the engine sees a
-    // matched rule). The Go SDK maps the same fixture to STATIC. Reason is passed through from the
-    // SDK verbatim, so the provider follows the Java SDK here.
-    assertEquals(Reason.TARGETING_MATCH.name(), b.getReason());
+    // A single ALWAYS_TRUE-criterion config resolves with the canonical STATIC reason (sdk-java
+    // 0.0.3+ aligned to the canonical STATIC/SPLIT semantics, qfg-q7yz). Reason is passed through
+    // from the SDK verbatim, so the provider follows the SDK here.
+    assertEquals(Reason.STATIC.name(), b.getReason());
     assertNotNull(provider.getClient());
     provider.shutdown();
   }
@@ -109,8 +109,8 @@ class QuonfigProviderTest {
     QuonfigProvider provider = newDatadirProvider();
     ProviderEvaluation<Boolean> d = provider.getBooleanEvaluation("always.true", false, null);
     assertTrue(d.getValue());
-    // See note in injectedClientConstructor_works: Java SDK returns TARGETING_MATCH here.
-    assertEquals(Reason.TARGETING_MATCH.name(), d.getReason());
+    // See note in injectedClientConstructor_works: a single ALWAYS_TRUE-criterion config is STATIC.
+    assertEquals(Reason.STATIC.name(), d.getReason());
     provider.shutdown();
   }
 
@@ -120,7 +120,7 @@ class QuonfigProviderTest {
     ProviderEvaluation<String> d =
         provider.getStringEvaluation("brand.new.string", "default", null);
     assertEquals("hello.world", d.getValue());
-    assertEquals(Reason.TARGETING_MATCH.name(), d.getReason());
+    assertEquals(Reason.STATIC.name(), d.getReason());
     provider.shutdown();
   }
 
@@ -172,9 +172,9 @@ class QuonfigProviderTest {
     ProviderEvaluation<String> d =
         provider.getStringEvaluation("brand.new.string", "default", null);
     assertEquals("hello.world", d.getValue());
-    // brand.new.string's single rule has an ALWAYS_TRUE criterion -> Java SDK reports
-    // TARGETING_MATCH (the Go SDK reports STATIC for the same fixture). Provider passes through.
-    assertEquals(Reason.TARGETING_MATCH.name(), d.getReason());
+    // brand.new.string's single rule has an ALWAYS_TRUE criterion -> canonical STATIC reason
+    // (sdk-java 0.0.3+, qfg-q7yz). Provider passes the SDK reason through.
+    assertEquals(Reason.STATIC.name(), d.getReason());
     provider.shutdown();
   }
 
@@ -238,9 +238,9 @@ class QuonfigProviderTest {
     QuonfigProvider provider = newDatadirProvider();
     ProviderEvaluation<String> d =
         provider.getStringEvaluation("brand.new.string", "default", null);
-    // Variant is passed through verbatim from the SDK. The single ALWAYS_TRUE rule (index 0)
-    // yields TARGETING_MATCH, so the synthetic variant is "targeting:0".
-    assertEquals("targeting:0", d.getVariant());
+    // Variant is passed through verbatim from the SDK. A single ALWAYS_TRUE-criterion config
+    // resolves STATIC (sdk-java 0.0.3+, qfg-q7yz), so the synthetic variant is "static".
+    assertEquals("static", d.getVariant());
     provider.shutdown();
   }
 
