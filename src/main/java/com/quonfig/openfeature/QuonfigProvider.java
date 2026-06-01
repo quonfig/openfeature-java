@@ -252,15 +252,68 @@ public class QuonfigProvider extends EventProvider {
    */
   private static Value jsonToValue(Object payload, Value fallback) {
     try {
-      // Round-trip through Jackson so nested maps/lists become a JSON-shaped object the
-      // OpenFeature objectToValue helper understands.
+      // Round-trip through Jackson so nested maps/lists become plain Map/List/Number/String/Boolean
+      // values, then build the Value tree ourselves. We can't hand the result to
+      // Value.objectToValue: sdk-java parses JSON integers as java.lang.Long, and objectToValue
+      // throws TypeMismatchError on Long (and BigDecimal), which would stringify the whole object.
       Object normalized = JSON.convertValue(payload, Object.class);
-      return Value.objectToValue(normalized);
+      return buildValue(normalized);
     } catch (RuntimeException e) {
       if (payload != null) {
         return new Value(payload.toString());
       }
       return fallback;
     }
+  }
+
+  /**
+   * Recursively builds an OpenFeature {@link Value} from a plain Jackson-normalized object tree
+   * (Map / List / Number / String / Boolean / null). Numerics are narrowed to the two types
+   * OpenFeature's {@link Value} supports: a {@link Long} that fits in an {@code int} becomes an
+   * {@link Integer}, everything else (including {@link Long} that overflows int) becomes a {@link
+   * Double}.
+   */
+  private static Value buildValue(Object node) {
+    if (node == null) {
+      return new Value();
+    }
+    if (node instanceof java.util.Map) {
+      dev.openfeature.sdk.MutableStructure structure = new dev.openfeature.sdk.MutableStructure();
+      for (java.util.Map.Entry<?, ?> entry : ((java.util.Map<?, ?>) node).entrySet()) {
+        structure.add(String.valueOf(entry.getKey()), buildValue(entry.getValue()));
+      }
+      return new Value(structure);
+    }
+    if (node instanceof List) {
+      List<?> list = (List<?>) node;
+      List<Value> values = new ArrayList<>(list.size());
+      for (Object element : list) {
+        values.add(buildValue(element));
+      }
+      return new Value(values);
+    }
+    if (node instanceof Boolean) {
+      return new Value((Boolean) node);
+    }
+    if (node instanceof String) {
+      return new Value((String) node);
+    }
+    if (node instanceof Number) {
+      Number number = (Number) node;
+      if (number instanceof Integer) {
+        return new Value((Integer) number);
+      }
+      if (number instanceof Double || number instanceof Float) {
+        return new Value(number.doubleValue());
+      }
+      // Long, BigInteger, BigDecimal, etc. — narrow to Integer when it fits, else Double.
+      long asLong = number.longValue();
+      if (number.doubleValue() == asLong && asLong >= Integer.MIN_VALUE && asLong <= Integer.MAX_VALUE) {
+        return new Value((int) asLong);
+      }
+      return new Value(number.doubleValue());
+    }
+    // Unknown leaf type — represent as its string form rather than dropping it.
+    return new Value(node.toString());
   }
 }

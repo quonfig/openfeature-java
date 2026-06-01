@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.3 - 2026-06-01
+
+- **Fix: `getObjectValue` / `getObjectDetails` now return a navigable structure
+  for JSON configs containing integers (qfg-07zr).** sdk-java parses JSON
+  integers as `java.lang.Long`, and `Value.objectToValue` throws
+  `TypeMismatchError` on `Long` (and `BigDecimal`). The provider previously
+  handed the parsed payload to `objectToValue`, so any JSON object with an
+  integer field fell into the catch and was returned as a stringified
+  `Map.toString()` blob (`isStructure() == false`). The provider now builds the
+  `Value` tree itself — `Map` → `MutableStructure`, `List` → `List<Value>`,
+  numerics narrowed to `Integer` (when they fit) or `Double` — so nested objects
+  with integer fields resolve as real, navigable structures.
+- No public API changes; resolved values for already-working configs are
+  unchanged.
+
 ## 0.0.2 - 2026-05-29
 
 Bump the native SDK dependency from `com.quonfig:sdk-java:0.0.2` to `0.0.4`

@@ -254,4 +254,19 @@ class QuonfigProviderTest {
     assertTrue(d.getValue().isList());
     provider.shutdown();
   }
+
+  @Test
+  void integration_objectEvaluation_jsonWithInteger_isNavigableStructure() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    // test.json's default rule resolves to {"a": 1, "b": "c"}. sdk-java parses the JSON integer
+    // as a java.lang.Long, which Value.objectToValue rejects — the old code stringified the whole
+    // object into a Map.toString() blob. The provider must build the Value tree itself.
+    ProviderEvaluation<Value> d =
+        provider.getObjectEvaluation("test.json", new Value("default"), null);
+    assertNotNull(d.getValue());
+    assertTrue(d.getValue().isStructure(), "JSON object must be a navigable Structure, not a blob");
+    assertEquals(1, d.getValue().asStructure().getValue("a").asInteger());
+    assertEquals("c", d.getValue().asStructure().getValue("b").asString());
+    provider.shutdown();
+  }
 }
