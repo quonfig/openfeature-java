@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.4 - 2026-06-02
+
+- Bump the `com.quonfig:sdk-java` dependency from `0.0.4` to `0.0.5` to inherit dev-context injection default-on (qfg-bw7g.9, via qfg-bw7g.6). No change to this provider's behavior — dev-context lives below the OpenFeature layer, so OpenFeature users now get `quonfig-user.email` injection by default in local dev (gated on the `qfg login` token file; inert in production).
+
 ## 0.0.3 - 2026-06-01
 
 - **Fix: `getObjectValue` / `getObjectDetails` now return a navigable structure
