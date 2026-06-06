@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:0.0.1")
+    implementation("com.quonfig:openfeature-server-java:1.0.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
