@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 - 2026-07-08
+
+- Bump the `com.quonfig:sdk-java` dependency from `1.1.0` to `1.2.0` to inherit
+  its failover-observability work: a WARN at init when an explicit `apiUrls`
+  silently disables secondary failover, and a `failover` telemetry event carrying
+  hedge-fired / guard-rejected / resolved-from counters folded into the existing
+  periodic flush (qfg-41nh). Both are additive and pull in no new dependencies.
+  No change to this provider's own public API — the behavior rides in via the SDK
+  bump. Coordinated 1.2.0 version stamp across the Quonfig SDK family.
+
 ## 1.1.0 - 2026-07-01
 
 - Bump the `com.quonfig:sdk-java` dependency from `1.0.0` to `1.1.0` to inherit
