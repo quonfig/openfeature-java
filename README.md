@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:1.0.0")
+    implementation("com.quonfig:openfeature-server-java:1.2.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
@@ -20,7 +20,7 @@ Maven:
 <dependency>
   <groupId>com.quonfig</groupId>
   <artifactId>openfeature-server-java</artifactId>
-  <version>0.0.1</version>
+  <version>1.2.0</version>
 </dependency>
 <dependency>
   <groupId>dev.openfeature</groupId>
@@ -98,8 +98,8 @@ QuonfigProvider provider = new QuonfigProvider(
 
 ## Native SDK escape hatch
 
-For features not exposed via OpenFeature (duration values, log levels, raw
-config access):
+For features not exposed via OpenFeature (parsed `java.time.Duration` values,
+log levels, raw config access):
 
 ```java
 com.quonfig.sdk.Quonfig nativeClient = provider.getClient();
@@ -118,7 +118,7 @@ java.time.Duration ttl = nativeClient.getDuration("cache.ttl", java.time.Duratio
 | `double`      | `getDoubleValue`       | Direct                               |
 | `string_list` | `getObjectValue`       | Returns a `Value` list               |
 | `json`        | `getObjectValue`       | Returns a parsed `Value` tree        |
-| `duration`    | N/A                    | Use the native client                |
+| `duration`    | `getStringValue`       | ISO 8601 string (e.g. `"PT90S"`)     |
 | `log_level`   | N/A                    | Native SDK only                      |
 
 Object evaluation tries `string_list` first, then JSON (same precedence as the
@@ -161,14 +161,16 @@ The OpenFeature spec covers common flag types. Some Quonfig-native features
 require the native SDK directly (via `getClient()`):
 
 1. **Log levels** (`shouldLog`, `getLogLevel`) — native SDK only.
-2. **`duration` configs** are not accessible via OpenFeature.
+2. **`duration` configs** are returned as the ISO 8601 string (e.g. `"PT90S"`)
+   via `getStringValue()`; use `getClient().getDuration()` for a
+   `java.time.Duration`.
 3. **`keys()`** and raw config access — native SDK only.
 4. Context keys must use dot-notation (`"user.email"`, not nested objects).
 5. `targetingKey` maps to `user.id` by default.
 
-## Reason note (Java vs Go)
+## Reason note (`ALWAYS_TRUE`)
 
-The Java SDK reports `TARGETING_MATCH` for a rule whose only criterion is
-`ALWAYS_TRUE`, where the Go SDK reports `STATIC` for the same fixture. The
-provider passes the SDK reason through verbatim, so behavior tracks whichever
-SDK you wrap. This is an SDK-level difference, not a provider decision.
+A flag whose only rule is an unconditional match (`ALWAYS_TRUE`) resolves with
+reason `STATIC`, the same as the Go SDK — `sdk-java` adopted the canonical
+`STATIC`/`SPLIT` reason semantics in 0.0.3. The provider passes the SDK reason
+through verbatim.
