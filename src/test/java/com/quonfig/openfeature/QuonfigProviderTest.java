@@ -2,7 +2,6 @@ package com.quonfig.openfeature;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -202,10 +201,29 @@ class QuonfigProviderTest {
   void integration_splitReason_weightedValue() throws Exception {
     QuonfigProvider provider = newDatadirProvider();
     // of.weighted hashes by user.id -> targetingKey maps to user.id by default.
+    // "92a202f2" lands in bucket 1 (variant-b).
     EvaluationContext ctx = new MutableContext().setTargetingKey("92a202f2");
     ProviderEvaluation<String> d = provider.getStringEvaluation("of.weighted", "default", ctx);
-    assertNotEquals("default", d.getValue());
+    assertEquals("variant-b", d.getValue());
     assertEquals(Reason.SPLIT.name(), d.getReason());
+    assertEquals("split:1", d.getVariant());
+    assertEquals(1, d.getFlagMetadata().getInteger("weightedValueIndex"));
+    provider.shutdown();
+  }
+
+  @Test
+  void integration_splitReason_weightedValueBucketZero() throws Exception {
+    // Regression for qfg-stbb: weightedValueIndex is 0-based, so a weighted rollout serving
+    // bucket 0 must still report SPLIT (not STATIC) and carry weightedValueIndex 0. Mirrors
+    // integration-test-data tests/openfeature/openfeature.yaml Case 5: hash("of.weighted" +
+    // "user-123") -> variant-a, the first weighted value.
+    QuonfigProvider provider = newDatadirProvider();
+    EvaluationContext ctx = new MutableContext().setTargetingKey("user-123");
+    ProviderEvaluation<String> d = provider.getStringEvaluation("of.weighted", "default", ctx);
+    assertEquals("variant-a", d.getValue());
+    assertEquals(Reason.SPLIT.name(), d.getReason());
+    assertEquals("split:0", d.getVariant());
+    assertEquals(0, d.getFlagMetadata().getInteger("weightedValueIndex"));
     provider.shutdown();
   }
 
