@@ -5,7 +5,7 @@ import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
     id("java-library")
-    id("com.vanniktech.maven.publish") version "0.30.0"
+    id("com.vanniktech.maven.publish") version "0.37.0"
 }
 
 group = providers.gradleProperty("GROUP").get()
@@ -22,11 +22,11 @@ java {
 }
 
 dependencies {
-    api("dev.openfeature:sdk:1.20.2")
+    api("dev.openfeature:sdk:1.23.0")
     // api scope: com.quonfig.sdk.Quonfig is on the public surface (QuonfigProvider
     // constructor + getClient()), so consumers need it at compile time. See qfg-jcgj.
-    api("com.quonfig:sdk-java:1.2.0")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    api("com.quonfig:sdk-java:1.5.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
