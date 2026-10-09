@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 - 2026-10-09
+
+- Bump the `com.quonfig:sdk-java` dependency from `1.2.0` to `1.6.0` to inherit
+  the SDK quality program's Wave 0/1 fixes: a malformed config row is skipped
+  instead of dropping the whole envelope, bounded SSE header wait, non-blocking
+  pre-init `getLogLevel`, close-during-init fix (qfg-goi1.2.16, qfg-rriw,
+  qfg-goi1.1.6) plus the 1.3.0-1.5.x fixes in between. No change to this
+  provider's own public API.
+
 ## 1.2.0 - 2026-07-08
 
 - Bump the `com.quonfig:sdk-java` dependency from `1.1.0` to `1.2.0` to inherit
