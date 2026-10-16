@@ -16,12 +16,12 @@ jobs:
         java-version: ["17"]
     steps:
       - name: Checkout openfeature-java
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           path: openfeature-java
 
       - name: Checkout integration-test-data
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           # Pinned to a tag (not main) so a typo in shared YAML can't break
           # every SDK's CI at once. Checked out as a sibling of openfeature-java;
