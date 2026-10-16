@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.4.0 - 2026-10-16
+
+Bump the `com.quonfig:sdk-java` dependency from `1.6.0` to `1.7.0`. This provider's own API is
+unchanged, but sdk-java 1.7.0 changes evaluation and connection behavior that OpenFeature users see
+through `getBooleanValue`, `getStringValue`, `getObjectValue` and friends. Read the upgrade notes
+before you roll it out.
+
+### Upgrade notes
+
+- **Some targeting rules match different users (qfg-goi1.5.8).** A context version of `"2"` or
+  `"2.0"` (common for mobile app versions) now compares as `2.0.0` in `PROP_SEMVER_*` rules instead
+  of never matching, so a user on `"4.1"` now matches `PROP_SEMVER_GREATER_THAN 4.0.18`. A
+  whole-number `Double`/`Float`/`BigDecimal` context value (for example a numeric id in an
+  OpenFeature `EvaluationContext`) is compared as plain digits (`1234567`), so
+  `PROP_IS_ONE_OF ["1234567"]` now matches `1234567.0`, and lists holding `"1.0"` or exponent
+  strings (`"5.0E9"`) stop matching. `IN_INT_RANGE` criteria stored as `int_range` now apply their
+  `[start, end)` bounds instead of matching every value. Pass dates to `PROP_BEFORE` /
+  `PROP_AFTER` rules as epoch milliseconds or ISO 8601 / RFC 3339 with `Z` or a numeric offset;
+  date-only and offset-less strings never match.
+- **A rejected SDK key backs off (qfg-goi1.10.27).** When fetches get 401, 403, 404 or 410, the
+  underlying client stops SSE and polling and probes once every 150-300s instead, logging one
+  ERROR (status and host, never the key). Evaluations keep serving the last good config; the first
+  valid response resumes normal streaming. The provider emits no extra OpenFeature event for this.
+
+### Also inherited
+
+- A confidential or `decryptWith` weighted rollout variant is now decrypted for the caller and
+  redacted in telemetry; before, `getStringValue` could return the raw ciphertext of a
+  `decryptWith` variant (qfg-goi1.10.19).
+- `getStringList` / `getJson` on the native client (`getClient()`) return a deep copy per call.
+  The provider already converted these into OpenFeature `Value`s, so provider evaluations are
+  unaffected (qfg-goi1.10.8).
+- Telemetry example contexts are copied at record time, so an odd context value no longer drops
+  the telemetry window (qfg-goi1.2.38); the SSE thread survives an `Error` (qfg-goi1.10.7); an
+  `ENV_VAR` coercion error no longer contains the variable's value (qfg-goi1.2.32).
+
 ## 1.3.0 - 2026-10-09
 
 - Bump the `com.quonfig:sdk-java` dependency from `1.2.0` to `1.6.0` to inherit
