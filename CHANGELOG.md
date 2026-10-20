@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.5.0 - 2026-10-20
+
+Bump the `com.quonfig:sdk-java` dependency from `1.7.0` to `1.8.0`. This provider's own API and
+code are unchanged; the changes below come from sdk-java 1.8.0 and reach OpenFeature users through
+the provider's evaluations and the native client returned by `getClient()`.
+
+### Upgrade notes
+
+- **SSE counts as connected at the first frame, not at the 200 response (qfg-goi1.10.9,
+  qfg-goi1.10.42).** The underlying client now treats a stream as connected only once it delivers
+  a config envelope or a keepalive. Against Quonfig's servers the two arrive together, so you
+  should see no difference. Behind a proxy that sends 200 headers early, the native client's
+  `connectionState()` and `onSseConnectionStateChange` listeners report `connected` up to one
+  keepalive interval (30 s) later. A stream that closes before any frame is now a failed attempt:
+  the reconnect delay grows and the fallback poller takes over after its usual threshold, instead
+  of the client reconnecting in a tight loop and keeping stale config. This provider does not map
+  connection state to OpenFeature events, so `PROVIDER_READY` and `PROVIDER_CONFIGURATION_CHANGED`
+  fire as before.
+
+### Fixed (inherited)
+
+- **Weighted rollout variants keep their type (qfg-lrlh).** A json variant inside a
+  `weighted_values` rollout now resolves through `getObjectValue` as a structured `Value`; before,
+  it came back as the variant's `toString()` text (`"{a=1, b=c}"`). A provided (`ENV_VAR`) variant
+  now reads its environment variable, so `getIntegerValue` / `getStringValue` return it instead of
+  the default with `TYPE_MISMATCH`.
+- **A `getDuration` evaluation no longer drops the telemetry window (qfg-a996).** OpenFeature has
+  no duration type, but if your code calls `getDuration` on the native client (`getClient()`), the
+  whole telemetry window (evaluation summaries, context shapes, examples) was dropped with a WARN.
+  It is now reported as the stored ISO-8601 string.
+
 ## 1.4.0 - 2026-10-16
 
 Bump the `com.quonfig:sdk-java` dependency from `1.6.0` to `1.7.0`. This provider's own API is
