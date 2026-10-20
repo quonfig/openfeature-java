@@ -33,3 +33,14 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Runtime dependencies of the published artifacts (api/implementation,
+      # plus compileOnly integrations where the customer brings their own
+      # version). A major bump here raises the floor every customer must run.
+      # Raise these deliberately in a release, not via Dependabot.
+      - dependency-name: "dev.openfeature:sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.quonfig:sdk-java"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.fasterxml.jackson.core:*"
+        update-types: ["version-update:semver-major"]
