@@ -6,6 +6,7 @@ import com.quonfig.sdk.Options;
 import com.quonfig.sdk.Quonfig;
 import com.quonfig.sdk.eval.ContextSet;
 import com.quonfig.sdk.eval.Murmur3WeightedValueResolver;
+import com.quonfig.sdk.exceptions.QuonfigInitException;
 import dev.openfeature.sdk.ErrorCode;
 import dev.openfeature.sdk.EvaluationContext;
 import dev.openfeature.sdk.EventProvider;
@@ -15,7 +16,7 @@ import dev.openfeature.sdk.ProviderEventDetails;
 import dev.openfeature.sdk.Value;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * An OpenFeature provider that wraps the {@code com.quonfig:sdk-java} native SDK.
@@ -44,14 +45,30 @@ public class QuonfigProvider extends EventProvider {
 
   private final QuonfigProviderOptions options;
   private volatile Quonfig client;
+  // True once the client has config and the provider has reported READY.
   private volatile boolean ready;
+  // True once initialize() has decided its outcome; config callbacks before that are the
+  // initial load and are suppressed.
+  private boolean initDecided;
+  private final Object stateLock = new Object();
   // True when the client was injected (test constructor); initialize() must not rebuild it.
   private final boolean clientInjected;
+  // Test seam; null in production.
+  private final Consumer<Options.Builder> sdkOptions;
 
   /** Constructs a provider from {@link QuonfigProviderOptions}. */
   public QuonfigProvider(QuonfigProviderOptions options) {
+    this(options, null);
+  }
+
+  /**
+   * Test seam: {@code sdkOptions} tweaks the sdk-java {@link Options.Builder} after the provider
+   * has applied {@link QuonfigProviderOptions} (e.g. to point delivery at a local test server).
+   */
+  QuonfigProvider(QuonfigProviderOptions options, Consumer<Options.Builder> sdkOptions) {
     this.options =
         options != null ? options : QuonfigProviderOptions.builder().build();
+    this.sdkOptions = sdkOptions;
     this.clientInjected = false;
   }
 
@@ -64,6 +81,7 @@ public class QuonfigProvider extends EventProvider {
     this.options = QuonfigProviderOptions.builder().build();
     this.client = client;
     this.clientInjected = true;
+    this.sdkOptions = null;
     this.ready = client != null;
   }
 
@@ -76,10 +94,14 @@ public class QuonfigProvider extends EventProvider {
   public void initialize(EvaluationContext evaluationContext) throws Exception {
     if (clientInjected) {
       // Client was supplied by the test constructor — it's already installed and ready.
-      this.ready = true;
+      synchronized (stateLock) {
+        this.initDecided = true;
+        this.ready = true;
+      }
       emitProviderReady(ProviderEventDetails.builder().build());
       return;
     }
+    Options sdkOptionsBuilt;
     try {
       Options.Builder b = Options.builder();
       // Wire the Murmur3 bucketing strategy so weighted_values configs resolve (SPLIT) out of
@@ -95,26 +117,94 @@ public class QuonfigProvider extends EventProvider {
       if (options.environment() != null && !options.environment().isEmpty()) {
         b.environment(options.environment());
       }
-      // Wire config-change notifications -> PROVIDER_CONFIGURATION_CHANGED. Guard on `ready`
-      // so the spurious initial-load callback fired during construction is suppressed (the
-      // Go provider guards the same way).
-      b.onConfigUpdate(
-          () -> {
-            if (ready) {
-              emitProviderConfigurationChanged(
-                  ProviderEventDetails.builder().flagsChanged(new ArrayList<>()).build());
-            }
-          });
+      if (options.initTimeout() != null) {
+        b.initTimeout(options.initTimeout());
+      }
+      if (options.onInitFailure() != null) {
+        b.onInitFailure(options.onInitFailure());
+      }
+      // Config-change notifications. The callback that fires during construction (the initial
+      // load) is suppressed (the Go provider guards the same way). After initialize() has
+      // decided, the first config to arrive on a client that had none is the heal ->
+      // PROVIDER_READY; every later one is PROVIDER_CONFIGURATION_CHANGED.
+      b.onConfigUpdate(this::onConfigUpdate);
 
-      Quonfig c = new Quonfig(b.build());
-      c.initFuture().get(15, TimeUnit.SECONDS);
-      this.client = c;
-      this.ready = true;
-      emitProviderReady(ProviderEventDetails.builder().build());
+      if (sdkOptions != null) {
+        sdkOptions.accept(b);
+      }
+      sdkOptionsBuilt = b.build();
     } catch (Exception e) {
       emitProviderError(ProviderEventDetails.builder().message(e.getMessage()).build());
       throw e;
     }
+
+    // sdk-java 2.0 blocks in the constructor until the first config loads, retrying until
+    // initTimeout, then applies onInitFailure (FAIL throws, WAIT keeps blocking, CONTINUE returns
+    // with no config). There is no separate wait here: initTimeout is the SDK's.
+    Quonfig c;
+    try {
+      c = new Quonfig(sdkOptionsBuilt);
+    } catch (QuonfigInitException e) {
+      // FAIL: keep the client the constructor built. It keeps retrying in the background, and
+      // its first config emits PROVIDER_READY (design B.5; no orphaned client).
+      if (decide(e.client())) {
+        emitProviderReady(ProviderEventDetails.builder().build()); // healed in the gap
+        return;
+      }
+      emitProviderError(
+          ProviderEventDetails.builder()
+              .message(e.getMessage())
+              .errorCode(ErrorCode.PROVIDER_NOT_READY)
+              .build());
+      throw e;
+    } catch (Exception e) {
+      emitProviderError(ProviderEventDetails.builder().message(e.getMessage()).build());
+      throw e;
+    }
+
+    if (decide(c)) {
+      emitProviderReady(ProviderEventDetails.builder().build());
+    } else {
+      // CONTINUE with no config: initialize resolves, but every evaluation is a code default, so
+      // the status is ERROR (non-fatal), not READY. The emit is applied after OpenFeature marks
+      // the provider READY on return (setProviderAndWait holds the API lock until then).
+      emitProviderError(
+          ProviderEventDetails.builder()
+              .message(
+                  "[quonfig] no config loaded by initTimeout (onInitFailure=CONTINUE); serving"
+                      + " code defaults until delivery recovers")
+              .errorCode(ErrorCode.PROVIDER_NOT_READY)
+              .build());
+    }
+  }
+
+  /**
+   * Records the client initialize() ended with and whether it has config. Returns that readiness.
+   * Synchronized with {@link #onConfigUpdate()} so a heal that lands while initialize() is
+   * deciding is reported exactly once.
+   */
+  private boolean decide(Quonfig c) {
+    synchronized (stateLock) {
+      this.client = c;
+      this.initDecided = true;
+      this.ready = c != null && c.isReady();
+      return this.ready;
+    }
+  }
+
+  private void onConfigUpdate() {
+    synchronized (stateLock) {
+      if (!initDecided) {
+        return; // initial load during construction
+      }
+      if (!ready) {
+        ready = true;
+        emitProviderReady(ProviderEventDetails.builder().build());
+        return;
+      }
+    }
+    emitProviderConfigurationChanged(
+        ProviderEventDetails.builder().flagsChanged(new ArrayList<>()).build());
   }
 
   @Override

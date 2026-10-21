@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+Bump the `com.quonfig:sdk-java` dependency from `1.8.0` to `2.0.0` and map its init-failure modes
+to OpenFeature provider status (qfg-9p4i.12; design doc section B.5).
+
+### Upgrade notes
+
+- **BREAKING (inherited from sdk-java 2.0.0): `initialize()` now fails when delivery is down.**
+  sdk-java 2.0 blocks its constructor until the first config loads and, by default
+  (`onInitFailure` = `FAIL`), throws `QuonfigInitException` at `initTimeout` (10s by default; at
+  once when every delivery leg rejects the SDK key). So `setProviderAndWait` throws and the
+  provider status is `ERROR`. Before, the provider waited up to a fixed 15s and then also failed,
+  but threw the client away. Set `.onInitFailure(OnInitFailure.CONTINUE)` to start on code defaults
+  instead. Datadir mode is unchanged.
+
+### Added
+
+- `QuonfigProviderOptions.Builder.initTimeout(Duration)` and `.onInitFailure(OnInitFailure)`, passed
+  through to sdk-java. Unset, the SDK defaults apply.
+
+### Changed
+
+- **The hard-coded 15s init wait is gone.** `initialize()` waits exactly as long as the SDK's
+  `initTimeout`.
+- **A failed init keeps the client (no orphan).** Under `FAIL` the provider keeps the client from
+  `QuonfigInitException.client()`. It keeps retrying, and when its first config arrives the provider
+  emits `PROVIDER_READY` and the status becomes `READY`.
+- **`CONTINUE` with no config reports `ERROR`, not `READY`.** `initialize()` returns, then the
+  provider emits `PROVIDER_ERROR` (non-fatal; evaluations return your defaults). It emits
+  `PROVIDER_READY` once a config arrives. `WAIT` keeps the status `NOT_READY` until the first config.
+- **Outage evaluations carry `PROVIDER_NOT_READY`.** sdk-java's new `PROVIDER_NOT_READY` error code
+  maps to OpenFeature's `PROVIDER_NOT_READY` (was `GENERAL`).
+
 ## 1.5.0 - 2026-10-20
 
 Bump the `com.quonfig:sdk-java` dependency from `1.7.0` to `1.8.0`. This provider's own API and

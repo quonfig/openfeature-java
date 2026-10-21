@@ -64,6 +64,8 @@ final class Mappings {
         return ErrorCode.FLAG_NOT_FOUND;
       case TYPE_MISMATCH:
         return ErrorCode.TYPE_MISMATCH;
+      case PROVIDER_NOT_READY:
+        return ErrorCode.PROVIDER_NOT_READY;
       case GENERAL:
       default:
         return ErrorCode.GENERAL;

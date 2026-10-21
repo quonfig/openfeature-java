@@ -142,18 +142,48 @@ throws — on error or a null value the caller's default is returned with the
 error code/message populated on the `ProviderEvaluation`.
 
 Error codes map: `FLAG_NOT_FOUND` -> `FLAG_NOT_FOUND`, `TYPE_MISMATCH` ->
-`TYPE_MISMATCH`, `GENERAL` -> `GENERAL`. Calls made before the provider is
-initialized return the default with `PROVIDER_NOT_READY`.
+`TYPE_MISMATCH`, `PROVIDER_NOT_READY` -> `PROVIDER_NOT_READY`, `GENERAL` ->
+`GENERAL`. Calls made before the provider is initialized, or while no config has
+loaded yet (see "Init failure"), return the default with `PROVIDER_NOT_READY`.
+
+## Init failure
+
+`initialize()` builds the sdk-java client, which blocks until the first config
+loads and retries through blips until `initTimeout` (SDK default 10s). What
+happens when delivery is down is set by `onInitFailure`; both options pass
+straight through to sdk-java:
+
+```java
+QuonfigProviderOptions.builder()
+    .sdkKey("qf_sk_production_...")
+    .initTimeout(Duration.ofSeconds(5))          // default: SDK default (10s)
+    .onInitFailure(OnInitFailure.CONTINUE)       // default: SDK default (FAIL)
+    .build();
+```
+
+| `onInitFailure`      | `initialize()`                         | Provider status | On heal          |
+|----------------------|----------------------------------------|-----------------|------------------|
+| `FAIL` (default)     | Throws (`setProviderAndWait` throws)   | `ERROR`         | `PROVIDER_READY` |
+| `WAIT`               | Blocks until the first config loads    | `NOT_READY`     | returns, `READY` |
+| `CONTINUE`           | Returns, then emits `PROVIDER_ERROR`   | `ERROR`         | `PROVIDER_READY` |
+
+Under `FAIL` and `CONTINUE` the provider keeps the client, which keeps retrying
+in the background; evaluations return your default with `PROVIDER_NOT_READY`
+until a config arrives. `ERROR` is non-fatal: evaluations still run. Datadir
+mode loads synchronously and is unaffected.
 
 ## Events
 
-- `PROVIDER_READY` is emitted after a successful `initialize()`.
+- `PROVIDER_READY` is emitted after a successful `initialize()`, and when a
+  client that started without config (`FAIL` or `CONTINUE` above) receives its
+  first config.
 - `PROVIDER_ERROR` is emitted if initialization fails (and the exception is
-  rethrown from `initialize()`).
+  rethrown from `initialize()`), and after `initialize()` returns under
+  `CONTINUE` with no config.
 - `PROVIDER_CONFIGURATION_CHANGED` is emitted when the SDK receives a config
   update (via the SDK's `onConfigUpdate` hook). The spurious initial-load
   callback is suppressed until the provider is ready.
-- `STALE` is not emitted in this version.
+- `STALE` is not emitted: sdk-java is a server SDK and keeps no cached config.
 
 ## What you lose vs. the native SDK
 
