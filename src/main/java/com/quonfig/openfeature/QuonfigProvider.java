@@ -193,18 +193,21 @@ public class QuonfigProvider extends EventProvider {
   }
 
   private void onConfigUpdate() {
+    boolean healed;
     synchronized (stateLock) {
       if (!initDecided) {
         return; // initial load during construction
       }
-      if (!ready) {
-        ready = true;
-        emitProviderReady(ProviderEventDetails.builder().build());
-        return;
-      }
+      healed = !ready;
+      ready = true;
     }
-    emitProviderConfigurationChanged(
-        ProviderEventDetails.builder().flagsChanged(new ArrayList<>()).build());
+    // Emit outside the lock (the emit itself is asynchronous in the OpenFeature SDK).
+    if (healed) {
+      emitProviderReady(ProviderEventDetails.builder().build());
+    } else {
+      emitProviderConfigurationChanged(
+          ProviderEventDetails.builder().flagsChanged(new ArrayList<>()).build());
+    }
   }
 
   @Override
