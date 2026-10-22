@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - 2026-10-22
 
-Bump the `com.quonfig:sdk-java` dependency from `1.8.0` to `2.0.0` and map its init-failure modes
+**BREAKING: major release.** Bump the `com.quonfig:sdk-java` dependency from `1.8.0` to `2.0.0` and map its init-failure modes
 to OpenFeature provider status (qfg-9p4i.12; design doc section B.5).
 
-### Upgrade notes
+### BREAKING (2.0.0)
 
 - **BREAKING (inherited from sdk-java 2.0.0): `initialize()` now fails when delivery is down.**
   sdk-java 2.0 blocks its constructor until the first config loads and, by default
