@@ -25,7 +25,7 @@ dependencies {
     api("dev.openfeature:sdk:1.20.2")
     // api scope: com.quonfig.sdk.Quonfig is on the public surface (QuonfigProvider
     // constructor + getClient()), so consumers need it at compile time. See qfg-jcgj.
-    api("com.quonfig:sdk-java:2.0.0")
+    api("com.quonfig:sdk-java:2.1.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))

@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.1.0 - 2026-10-23
+
+Bump the `com.quonfig:sdk-java` dependency from `2.0.0` to `2.1.0` (requires sdk-java 2.1.0: size
+caps on SSE events and config bodies, `callback_errors_total`, init fixes). This provider's own API
+and code are unchanged; the changes below come from sdk-java 2.1.0 and reach OpenFeature users
+through the provider's evaluations and the native client returned by `getClient()`.
+
+### Upgrade notes
+
+- **`HttpTransportException.bodyExcerpt()` holds at most 1 KiB (inherited, qfg-6vno.20.2).** The
+  underlying client reads at most 1 KiB of a non-2xx response body (was 8 KiB). Code that parses a
+  longer upstream error body out of the excerpt on the native client sees a shorter string. The body
+  is never logged or put in an error message.
+
+### Changed (inherited)
+
+- **SSE events are capped at 4 MiB and config response bodies at 16 MiB (qfg-6vno.20.2).** An event
+  over the cap is dropped and counts as a failed stream attempt, so the fallback poller keeps config
+  fresh; an oversized config body fails that delivery leg like a 5xx and the client fails over.
+  Before, one huge or unterminated event could throw `OutOfMemoryError`.
+- **A throwing user callback is no longer counted as a worker restart (qfg-6vno.28).** Caught throws
+  from `onConfigUpdate` and `onSseConnectionStateChange` listeners go to a new internal
+  `quonfig_sdk_callback_errors_total{callback}` counter, and a throwing connection-state listener is
+  now logged at ERROR instead of being swallowed. Both callback paths now catch `Exception`, not
+  only `RuntimeException`.
+
+### Fixed (inherited)
+
+- A boot rescued by the secondary delivery leg no longer logs a spurious `[quonfig] init recovered`
+  WARN (qfg-6vno.3).
+- An HTTP 304 to the first config fetch, with no config installed yet, now counts as a failed
+  delivery leg, so init keeps retrying instead of stopping with nothing loaded (qfg-6vno.11). Under
+  `OnInitFailure.CONTINUE` the provider now reaches `READY` once the retry loads a config, instead
+  of staying on code defaults until SSE delivers one.
+
 ## 2.0.0 - 2026-10-22
 
 **BREAKING: major release.** Bump the `com.quonfig:sdk-java` dependency from `1.8.0` to `2.0.0` and map its init-failure modes
