@@ -28,7 +28,7 @@ jobs:
           # the datadir-mode tests resolve it at ../integration-test-data.
           repository: quonfig/integration-test-data
           path: integration-test-data
-          ref: v2026.05.20
+          ref: v2026.10.26
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v4
         with:
