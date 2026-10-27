@@ -1,5 +1,53 @@
 # Changelog
 
+## 2.2.0 - 2026-10-27
+
+Bump the `com.quonfig:sdk-java` dependency from `2.1.0` to `2.2.0`: the cross-SDK typed-getter
+contract (qfg-zvyy.7, qfg-koj9). A typed read that cannot return a value of the requested type
+returns your default with reason `ERROR`, and sdk-java logs one WARN per key. Strings are never
+coerced, and numbers convert only when the result is exact. Minor release: it mostly widens what
+the getters accept; the edge cases below change.
+
+### UPGRADE to 2.2.0
+
+- **`getStringValue` on a `duration` config returns your default with `TYPE_MISMATCH`.** Before,
+  it returned the ISO 8601 text (`"PT30S"`, reason `STATIC`). Durations are now native-only: read
+  them with `getClient().getDuration()`. `getDoubleValue`, `getIntegerValue` and `getObjectValue`
+  on a duration already returned your default.
+- **`getDoubleValue` reads an int config** (`30` -> `30.0`), and **`getIntegerValue` reads a
+  double config** holding a whole number within +/-(2^53-1) (`3.0` -> `3`). Before, both returned
+  your default with `TYPE_MISMATCH`. `3.9`, `2^53` and `1e300` still return your default; nothing
+  is truncated.
+- **A malformed stored int or double returns your default with `TYPE_MISMATCH`.** Before, a stored
+  `"twelve"` or `"abc"` read as `0` / `0.0` with reason `STATIC`.
+- **A malformed ENV_VAR value reports `TYPE_MISMATCH`** (was `GENERAL`). The default is returned in
+  both versions. An unset ENV_VAR still reports `GENERAL`.
+- **`getIntegerValue` on an int config outside the 32-bit range returns your default with
+  `TYPE_MISMATCH`** (provider fix). Before, the provider narrowed the SDK's 64-bit value with a
+  wrapping cast, so `3000000000` read as `-1294967296`. Read such values with `getDoubleValue` or
+  `getClient().getLong()`.
+- sdk-java logs one WARN per key when a read returns your default because of a type mismatch, a
+  malformed value, an unset ENV_VAR or a decryption failure. The line names the key, never the
+  value. A wrong decryption key therefore degrades to your defaults with these WARNs.
+
+These already held under 2.1.0, and the new tests now pin them: a stored string `"true"` /
+`"false"` read as a boolean, a stored `"3"` read as a number, an int or bool read as a string, an
+int read as a boolean, and a string, bool or duration read as an object all return your default
+with `TYPE_MISMATCH`.
+
+### Known issue
+
+- The first `getObjectValue` on a `json` config logs one sdk-java WARN for that key ("is JSON,
+  caller expected STRING_LIST"), although the read succeeds. The provider probes `string_list`
+  before JSON, and sdk-java 2.2.0 has no type check that does not log. The value is unaffected.
+
+### Tests
+
+- New `TypedGetterContractTest` (32 tests) drives the real provider through the OpenFeature client
+  against the integration-test-data `getter.contract.*` fixtures. On sdk-java 2.1.0, 8 fail; on
+  2.2.0 with the provider fix, all pass.
+- CI runs integration-test-data `v2026.10.26` (was `v2026.05.20`), which has those fixtures.
+
 ## 2.1.0 - 2026-10-23
 
 Bump the `com.quonfig:sdk-java` dependency from `2.0.0` to `2.1.0` (requires sdk-java 2.1.0: size

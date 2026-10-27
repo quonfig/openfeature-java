@@ -262,7 +262,22 @@ public class QuonfigProvider extends EventProvider {
     if (d.errorCode() != null || d.value() == null) {
       return build(defaultValue, d);
     }
-    return build(d.value().intValue(), d);
+    long v = d.value();
+    if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
+      // No exact Integer for this value: return the default rather than wrap it, the same
+      // "only exact conversions" rule the SDK applies to doubles (qfg-zvyy.7).
+      return ProviderEvaluation.<Integer>builder()
+          .value(defaultValue)
+          .variant("default")
+          .reason(dev.openfeature.sdk.Reason.ERROR.name())
+          .errorCode(ErrorCode.TYPE_MISMATCH)
+          .errorMessage(
+              "config \"" + key + "\" is outside the 32-bit integer range; read it with"
+                  + " getDoubleValue or getClient().getLong")
+          .flagMetadata(Mappings.flagMetadataFor(d))
+          .build();
+    }
+    return build((int) v, d);
   }
 
   @Override
