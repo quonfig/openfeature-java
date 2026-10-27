@@ -1,14 +1,16 @@
 # Changelog
 
-## 2.2.0 - 2026-10-27
+## 3.0.0 - 2026-10-27
 
 Bump the `com.quonfig:sdk-java` dependency from `2.1.0` to `2.2.0`: the cross-SDK typed-getter
 contract (qfg-zvyy.7, qfg-koj9). A typed read that cannot return a value of the requested type
 returns your default with reason `ERROR`, and sdk-java logs one WARN per key. Strings are never
-coerced, and numbers convert only when the result is exact. Minor release: it mostly widens what
-the getters accept; the edge cases below change.
+coerced, and numbers convert only when the result is exact. Major release: sdk-java took this as a
+minor because it mostly widens what the getters accept, but through OpenFeature the changes below
+alter results on existing calls (a string read of a duration, malformed int/double values, a
+64-bit int read as an integer), so the provider takes a major, like the other Quonfig providers.
 
-### UPGRADE to 2.2.0
+### UPGRADE to 3.0
 
 - **`getStringValue` on a `duration` config returns your default with `TYPE_MISMATCH`.** Before,
   it returned the ISO 8601 text (`"PT30S"`, reason `STATIC`). Durations are now native-only: read

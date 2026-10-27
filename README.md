@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:2.2.0")
+    implementation("com.quonfig:openfeature-server-java:3.0.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
@@ -20,7 +20,7 @@ Maven:
 <dependency>
   <groupId>com.quonfig</groupId>
   <artifactId>openfeature-server-java</artifactId>
-  <version>2.2.0</version>
+  <version>3.0.0</version>
 </dependency>
 <dependency>
   <groupId>dev.openfeature</groupId>
@@ -211,7 +211,7 @@ require the native SDK directly (via `getClient()`):
 1. **Log levels** (`shouldLog`, `getLogLevel`) — native SDK only.
 2. **`duration` configs** are native-only: use `getClient().getDuration()` for a
    `java.time.Duration`. `getStringValue()` on a duration config returns your
-   default with `TYPE_MISMATCH` (before 2.2.0 it returned the ISO 8601 text).
+   default with `TYPE_MISMATCH` (before 3.0.0 it returned the ISO 8601 text).
 3. **`keys()`** and raw config access — native SDK only.
 4. Context keys must use dot-notation (`"user.email"`, not nested objects).
 5. `targetingKey` maps to `user.id` by default.
