@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.1.0 - 2026-10-28
+
+A value that has the requested type but cannot be parsed now returns your default with reason
+`ERROR` and error code **`PARSE_ERROR`** (was `TYPE_MISMATCH`) (qfg-9xsl). That is a data problem;
+`TYPE_MISMATCH` stays for a caller problem, a read with the method for another type. This matches
+openfeature-go and integration-test-data `tests/openfeature/openfeature.yaml` Case 6.
+
+### Changed
+
+- **`PARSE_ERROR` for unparseable values.** These return your default with `PARSE_ERROR`:
+  - a malformed stored int or double (`"twelve"`, `"abc"`) read with `getIntegerValue` or
+    `getDoubleValue`;
+  - an int or double provided by an ENV_VAR holding an unparseable string;
+  - a malformed stored duration (`"30s"`) read with `getStringValue`. A well-formed duration read
+    with `getStringValue` is still `TYPE_MISMATCH`: durations are native-only.
+
+  The returned value and reason are unchanged. Code that branches on `TYPE_MISMATCH` for these
+  cases should also check `PARSE_ERROR`.
+
+### Implementation
+
+sdk-java 2.2.0's details API reports both cases as `TYPE_MISMATCH`; only its `get*OrThrow` family
+tells them apart (`QuonfigCoercionException`). On `TYPE_MISMATCH` the provider re-reads through the
+matching `get*OrThrow` and maps a coercion failure to `PARSE_ERROR`. The extra read happens only on
+that error path. No dependency change.
+
 ## 3.0.0 - 2026-10-27
 
 Bump the `com.quonfig:sdk-java` dependency from `2.1.0` to `2.2.0`: the cross-SDK typed-getter

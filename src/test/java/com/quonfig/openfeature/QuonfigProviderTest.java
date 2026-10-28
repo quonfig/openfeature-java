@@ -15,6 +15,8 @@ import dev.openfeature.sdk.Reason;
 import dev.openfeature.sdk.Value;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class QuonfigProviderTest {
@@ -285,6 +287,85 @@ class QuonfigProviderTest {
     assertTrue(d.getValue().isStructure(), "JSON object must be a navigable Structure, not a blob");
     assertEquals(1, d.getValue().asStructure().getValue("a").asInteger());
     assertEquals("c", d.getValue().asStructure().getValue("b").asString());
+    provider.shutdown();
+  }
+
+  // --- integration-test-data tests/openfeature/openfeature.yaml Case 6 (qfg-9xsl) ---
+  // A value that has the requested type but cannot be parsed is PARSE_ERROR (a data problem); a
+  // read with the method for another type is TYPE_MISMATCH (a caller problem).
+
+  /** Datadir provider whose ENV_VAR lookups see {@code env} instead of the JVM environment. */
+  private static QuonfigProvider newDatadirProvider(Map<String, String> env) throws Exception {
+    QuonfigProvider provider =
+        new QuonfigProvider(
+            QuonfigProviderOptions.builder()
+                .datadir(integrationTestDataDir())
+                .environment("Production")
+                .build(),
+            b -> b.disableTelemetry(true).envLookup(k -> Optional.ofNullable(env.get(k))));
+    provider.initialize(new MutableContext());
+    return provider;
+  }
+
+  private static <T> void assertErrorEval(ProviderEvaluation<T> d, T def, ErrorCode code) {
+    assertEquals(def, d.getValue(), "value");
+    assertEquals(Reason.ERROR.name(), d.getReason(), "reason");
+    assertEquals(code, d.getErrorCode(), "errorCode");
+  }
+
+  @Test
+  void case6_malformedStoredInt_returnsDefaultWithParseError() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    assertErrorEval(
+        provider.getIntegerEvaluation("getter.contract.int.malformed", 7, null),
+        7,
+        ErrorCode.PARSE_ERROR);
+    provider.shutdown();
+  }
+
+  @Test
+  void case6_malformedStoredDouble_returnsDefaultWithParseError() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    assertErrorEval(
+        provider.getDoubleEvaluation("getter.contract.double.malformed", 1.5, null),
+        1.5,
+        ErrorCode.PARSE_ERROR);
+    provider.shutdown();
+  }
+
+  @Test
+  void case6_envVarProvidedMalformedInt_returnsDefaultWithParseError() throws Exception {
+    QuonfigProvider provider = newDatadirProvider(Map.of("QUONFIG_ITD_GETTER_INT", "twelve"));
+    assertErrorEval(
+        provider.getIntegerEvaluation("getter.contract.provided.int.malformed", 7, null),
+        7,
+        ErrorCode.PARSE_ERROR);
+    provider.shutdown();
+  }
+
+  @Test
+  void case6_intConfigViaBoolean_returnsDefaultWithTypeMismatch() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    assertErrorEval(
+        provider.getBooleanEvaluation("getter.contract.int", false, null),
+        false,
+        ErrorCode.TYPE_MISMATCH);
+    provider.shutdown();
+  }
+
+  @Test
+  void case2_malformedStoredDurationViaString_returnsDefaultWithParseError() throws Exception {
+    // openfeature.yaml Case 2, malformed-duration case. A well-formed duration read with
+    // getStringValue stays TYPE_MISMATCH (durations are native-only in this provider).
+    QuonfigProvider provider = newDatadirProvider();
+    assertErrorEval(
+        provider.getStringEvaluation("test.duration.malformed.30s", "PT0S", null),
+        "PT0S",
+        ErrorCode.PARSE_ERROR);
+    assertErrorEval(
+        provider.getStringEvaluation("test.duration.PT90S", "PT0S", null),
+        "PT0S",
+        ErrorCode.TYPE_MISMATCH);
     provider.shutdown();
   }
 }
