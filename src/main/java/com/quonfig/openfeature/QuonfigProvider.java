@@ -6,6 +6,7 @@ import com.quonfig.sdk.Options;
 import com.quonfig.sdk.Quonfig;
 import com.quonfig.sdk.eval.ContextSet;
 import com.quonfig.sdk.eval.Murmur3WeightedValueResolver;
+import com.quonfig.sdk.exceptions.QuonfigCoercionException;
 import com.quonfig.sdk.exceptions.QuonfigInitException;
 import dev.openfeature.sdk.ErrorCode;
 import dev.openfeature.sdk.EvaluationContext;
@@ -243,7 +244,10 @@ public class QuonfigProvider extends EventProvider {
     ContextSet qCtx = ContextMapper.mapContext(ctx, options.targetingKeyMapping());
     EvaluationDetails<String> d = c.getStringDetails(key, defaultValue, qCtx);
     if (d.errorCode() != null || d.value() == null) {
-      return build(defaultValue, d);
+      // Durations are native-only, so a duration config read here is TYPE_MISMATCH, unless its
+      // stored value does not parse: that is PARSE_ERROR (openfeature.yaml Case 2).
+      return buildFailure(
+          key, "duration", defaultValue, d, () -> c.getDurationOrThrow(key, qCtx));
     }
     return build(d.value(), d);
   }
@@ -260,7 +264,7 @@ public class QuonfigProvider extends EventProvider {
     Long def = defaultValue == null ? null : defaultValue.longValue();
     EvaluationDetails<Long> d = c.getIntDetails(key, def, qCtx);
     if (d.errorCode() != null || d.value() == null) {
-      return build(defaultValue, d);
+      return buildFailure(key, "int", defaultValue, d, () -> c.getLongOrThrow(key, qCtx));
     }
     long v = d.value();
     if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
@@ -290,7 +294,7 @@ public class QuonfigProvider extends EventProvider {
     ContextSet qCtx = ContextMapper.mapContext(ctx, options.targetingKeyMapping());
     EvaluationDetails<Double> d = c.getDoubleDetails(key, defaultValue, qCtx);
     if (d.errorCode() != null || d.value() == null) {
-      return build(defaultValue, d);
+      return buildFailure(key, "double", defaultValue, d, () -> c.getDoubleOrThrow(key, qCtx));
     }
     return build(d.value(), d);
   }
@@ -341,6 +345,36 @@ public class QuonfigProvider extends EventProvider {
         .errorMessage(d.errorMessage())
         .flagMetadata(Mappings.flagMetadataFor(d))
         .build();
+  }
+
+  /**
+   * Builds the result for a failed typed read. sdk-java's details API reports both a wrong-type
+   * read and a value of the right type that does not parse as {@code TYPE_MISMATCH}; only its
+   * {@code get*OrThrow} family tells them apart, with {@link QuonfigCoercionException} for the
+   * latter. So on {@code TYPE_MISMATCH} the provider re-reads through {@code probe} (the matching
+   * {@code get*OrThrow}) and reports a coercion failure as {@code PARSE_ERROR} (qfg-9xsl), the same
+   * split openfeature-go makes. The probe runs only on this error path.
+   */
+  private static <T> ProviderEvaluation<T> buildFailure(
+      String key, String type, T defaultValue, EvaluationDetails<?> d, Runnable probe) {
+    ProviderEvaluation<T> result = build(defaultValue, d);
+    if (d.errorCode() == com.quonfig.sdk.ErrorCode.TYPE_MISMATCH && isUnparseable(probe)) {
+      result.setErrorCode(ErrorCode.PARSE_ERROR);
+      // The message names the key, never the value.
+      result.setErrorMessage("config \"" + key + "\" has a malformed " + type + " value");
+    }
+    return result;
+  }
+
+  private static boolean isUnparseable(Runnable probe) {
+    try {
+      probe.run();
+      return false;
+    } catch (QuonfigCoercionException e) {
+      return true;
+    } catch (RuntimeException e) {
+      return false;
+    }
   }
 
   private static <T> ProviderEvaluation<T> notReady(T defaultValue) {

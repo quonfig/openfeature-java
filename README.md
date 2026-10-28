@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:3.0.0")
+    implementation("com.quonfig:openfeature-server-java:3.1.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
@@ -20,7 +20,7 @@ Maven:
 <dependency>
   <groupId>com.quonfig</groupId>
   <artifactId>openfeature-server-java</artifactId>
-  <version>3.0.0</version>
+  <version>3.1.0</version>
 </dependency>
 <dependency>
   <groupId>dev.openfeature</groupId>
@@ -133,9 +133,13 @@ The provider follows the typed-getter contract shared by every Quonfig SDK
 default with reason `ERROR` and error code `TYPE_MISMATCH`, and sdk-java logs one
 WARN per key. Strings are never coerced: a stored `"true"` is not a boolean, a
 stored `"3"` is not a number, and an int or bool config is not a string. Numbers
-convert only when the result is exact (see the table above). A malformed stored
-int or double, or a malformed ENV_VAR value, also returns your default with
-`TYPE_MISMATCH`. An unset ENV_VAR returns your default with `GENERAL`.
+convert only when the result is exact (see the table above). A value of the
+right type that cannot be parsed returns your default with reason `ERROR` and
+error code `PARSE_ERROR`: a malformed stored int or double (`"twelve"`, `"abc"`),
+an int or double provided by an ENV_VAR set to an unparseable string, or a
+malformed stored duration (`"30s"`) read with `getStringValue`. That is a data
+problem; `TYPE_MISMATCH` is a caller problem. An unset ENV_VAR returns your
+default with `GENERAL`.
 
 Known issue: the first `getObjectValue` on a `json` config logs one sdk-java
 WARN for that key (`read of "<key>" returned no value ...`, "is JSON, caller
@@ -161,7 +165,8 @@ error code/message populated on the `ProviderEvaluation`.
 
 Error codes map: `FLAG_NOT_FOUND` -> `FLAG_NOT_FOUND`, `TYPE_MISMATCH` ->
 `TYPE_MISMATCH`, `PROVIDER_NOT_READY` -> `PROVIDER_NOT_READY`, `GENERAL` ->
-`GENERAL`. Calls made before the provider is initialized, or while no config has
+`GENERAL`. sdk-java reports a value that does not parse as `TYPE_MISMATCH`; the
+provider reports it as `PARSE_ERROR` (see "Typed-getter contract"). Calls made before the provider is initialized, or while no config has
 loaded yet (see "Init failure"), return the default with `PROVIDER_NOT_READY`.
 
 ## Init failure
@@ -211,7 +216,8 @@ require the native SDK directly (via `getClient()`):
 1. **Log levels** (`shouldLog`, `getLogLevel`) — native SDK only.
 2. **`duration` configs** are native-only: use `getClient().getDuration()` for a
    `java.time.Duration`. `getStringValue()` on a duration config returns your
-   default with `TYPE_MISMATCH` (before 3.0.0 it returned the ISO 8601 text).
+   default with `TYPE_MISMATCH` (before 3.0.0 it returned the ISO 8601 text),
+   or `PARSE_ERROR` if the stored duration is malformed.
 3. **`keys()`** and raw config access — native SDK only.
 4. Context keys must use dot-notation (`"user.email"`, not nested objects).
 5. `targetingKey` maps to `user.id` by default.

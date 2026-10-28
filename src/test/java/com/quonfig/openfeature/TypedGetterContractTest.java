@@ -30,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
  * reason ERROR and error code TYPE_MISMATCH. Strings are never coerced (a stored "false" is not a
  * bool, "3" is not a number, an int is not a string). Numbers convert only when exact: an int config
  * reads as a double, and a double config reads as an integer only when it is whole and within
- * +/-(2^53-1). A malformed stored or ENV_VAR number also returns the default with TYPE_MISMATCH.
+ * +/-(2^53-1). A malformed stored or ENV_VAR number returns the default with PARSE_ERROR (qfg-9xsl).
  */
 class TypedGetterContractTest {
 
@@ -79,6 +79,10 @@ class TypedGetterContractTest {
 
   private static <T> void assertTypeMismatch(FlagEvaluationDetails<T> d, T def) {
     assertError(d, def, ErrorCode.TYPE_MISMATCH);
+  }
+
+  private static <T> void assertParseError(FlagEvaluationDetails<T> d, T def) {
+    assertError(d, def, ErrorCode.PARSE_ERROR);
   }
 
   private static <T> void assertResolved(FlagEvaluationDetails<T> d, T expected) {
@@ -238,23 +242,23 @@ class TypedGetterContractTest {
   // --- Malformed values and resolution errors return the default ---
 
   @Test
-  void double_onMalformedStoredDouble_returnsDefaultWithTypeMismatch() {
-    assertTypeMismatch(client.getDoubleDetails("getter.contract.double.malformed", 1.5), 1.5);
+  void double_onMalformedStoredDouble_returnsDefaultWithParseError() {
+    assertParseError(client.getDoubleDetails("getter.contract.double.malformed", 1.5), 1.5);
   }
 
   @Test
-  void integer_onMalformedStoredInt_returnsDefaultWithTypeMismatch() {
-    assertTypeMismatch(client.getIntegerDetails("getter.contract.int.malformed", 12), 12);
+  void integer_onMalformedStoredInt_returnsDefaultWithParseError() {
+    assertParseError(client.getIntegerDetails("getter.contract.int.malformed", 12), 12);
   }
 
   @Test
-  void integer_onMalformedEnvVar_returnsDefaultWithTypeMismatch() {
-    assertTypeMismatch(client.getIntegerDetails("getter.contract.provided.int.malformed", 4), 4);
+  void integer_onMalformedEnvVar_returnsDefaultWithParseError() {
+    assertParseError(client.getIntegerDetails("getter.contract.provided.int.malformed", 4), 4);
   }
 
   @Test
-  void double_onMalformedEnvVar_returnsDefaultWithTypeMismatch() {
-    assertTypeMismatch(
+  void double_onMalformedEnvVar_returnsDefaultWithParseError() {
+    assertParseError(
         client.getDoubleDetails("getter.contract.provided.double.malformed", 2.5), 2.5);
   }
 
