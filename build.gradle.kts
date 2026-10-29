@@ -15,6 +15,14 @@ repositories {
     mavenCentral()
 }
 
+// Lock every resolved configuration to gradle.lockfile so ssdlc / deps (osv-scanner) can see the
+// exact dependency tree (qfg-66ko.19). Locking only pins this repo's own builds: the published POM
+// and Gradle module metadata still carry the declared versions, so consumers resolve as before.
+// Refresh after a dependency change with: ./gradlew dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
@@ -26,7 +34,7 @@ dependencies {
     // api scope: com.quonfig.sdk.Quonfig is on the public surface (QuonfigProvider
     // constructor + getClient()), so consumers need it at compile time. See qfg-jcgj.
     api("com.quonfig:sdk-java:2.3.0")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.12")
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
