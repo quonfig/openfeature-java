@@ -13,11 +13,13 @@ import dev.openfeature.sdk.MutableContext;
 import dev.openfeature.sdk.ProviderEvaluation;
 import dev.openfeature.sdk.Reason;
 import dev.openfeature.sdk.Value;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class QuonfigProviderTest {
 
@@ -353,18 +355,128 @@ class QuonfigProviderTest {
     provider.shutdown();
   }
 
+  // --- integration-test-data tests/openfeature/openfeature.yaml Case 2 (qfg-177f) ---
+  // A duration read with getStringValue returns its stored ISO 8601 text unchanged, with the
+  // evaluation's reason/variant/metadata. A malformed stored duration is PARSE_ERROR.
+
+  @Test
+  void case2_durationViaString_returnsStoredIsoText() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    ProviderEvaluation<String> d = provider.getStringEvaluation("test.duration.PT90S", "PT0S", null);
+    assertEquals("PT90S", d.getValue(), "not re-normalized to PT1M30S");
+    assertEquals(Reason.STATIC.name(), d.getReason());
+    assertEquals(null, d.getErrorCode());
+    assertEquals("static", d.getVariant());
+    assertEquals("test.duration.PT90S", d.getFlagMetadata().getString("configKey"));
+    provider.shutdown();
+  }
+
+  @Test
+  void case2_multiComponentDurationViaString_returnsStoredIsoTextUnchanged() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    ProviderEvaluation<String> d =
+        provider.getStringEvaluation("test.duration.P1DT6H2M1.5S", "PT0S", null);
+    assertEquals("P1DT6H2M1.5S", d.getValue());
+    assertEquals(Reason.STATIC.name(), d.getReason());
+    assertEquals(null, d.getErrorCode());
+    provider.shutdown();
+  }
+
+  @Test
+  void case2_ruleSelectedDurationViaString_returnsIsoTextWithRuleReason(@TempDir Path dir)
+      throws Exception {
+    // Local fixtures: the pinned integration-test-data tag has no targeted or weighted duration.
+    Files.writeString(dir.resolve("quonfig.json"), "{\"environments\": [\"Production\"]}");
+    Path configs = Files.createDirectories(dir.resolve("configs"));
+    Files.writeString(
+        configs.resolve("of.duration.targeted.json"),
+        "{\"id\":\"1\",\"projectId\":\"1\",\"key\":\"of.duration.targeted\","
+            + "\"type\":\"config\",\"valueType\":\"duration\",\"sendToClientSdk\":false,"
+            + "\"default\":{\"rules\":["
+            + "{\"criteria\":[{\"propertyName\":\"user.plan\",\"operator\":\"PROP_IS_ONE_OF\","
+            + "\"valueToMatch\":{\"type\":\"string_list\",\"value\":[\"pro\"]}}],"
+            + "\"value\":{\"type\":\"duration\",\"value\":\"PT5M\"}},"
+            + "{\"criteria\":[{\"operator\":\"ALWAYS_TRUE\"}],"
+            + "\"value\":{\"type\":\"duration\",\"value\":\"PT1M\"}}]}}");
+    Files.writeString(
+        configs.resolve("of.duration.weighted.json"),
+        "{\"id\":\"2\",\"projectId\":\"1\",\"key\":\"of.duration.weighted\","
+            + "\"type\":\"config\",\"valueType\":\"duration\",\"sendToClientSdk\":false,"
+            + "\"default\":{\"rules\":[{\"criteria\":[{\"operator\":\"ALWAYS_TRUE\"}],"
+            + "\"value\":{\"type\":\"weighted_values\",\"value\":{\"weightedValues\":["
+            + "{\"weight\":100000,\"value\":{\"type\":\"duration\",\"value\":\"PT90S\"}}],"
+            + "\"hashByPropertyName\":\"user.tracking_id\"}}}]}}");
+    QuonfigProvider provider =
+        new QuonfigProvider(
+            QuonfigProviderOptions.builder()
+                .datadir(dir.toString())
+                .environment("Production")
+                .build(),
+            b -> b.disableTelemetry(true));
+    provider.initialize(new MutableContext());
+    try {
+      ProviderEvaluation<String> pro =
+          provider.getStringEvaluation(
+              "of.duration.targeted", "PT0S", new MutableContext().add("user.plan", "pro"));
+      assertEquals("PT5M", pro.getValue());
+      assertEquals(Reason.TARGETING_MATCH.name(), pro.getReason());
+      assertEquals(null, pro.getErrorCode());
+
+      ProviderEvaluation<String> other =
+          provider.getStringEvaluation("of.duration.targeted", "PT0S", null);
+      assertEquals("PT1M", other.getValue());
+      assertEquals(Reason.TARGETING_MATCH.name(), other.getReason());
+
+      ProviderEvaluation<String> split =
+          provider.getStringEvaluation(
+              "of.duration.weighted", "PT0S", new MutableContext().add("user.tracking_id", "abc"));
+      assertEquals("PT90S", split.getValue());
+      assertEquals(Reason.SPLIT.name(), split.getReason());
+      assertEquals("split:0", split.getVariant());
+      assertEquals(0, split.getFlagMetadata().getInteger("weightedValueIndex"));
+    } finally {
+      provider.shutdown();
+    }
+  }
+
   @Test
   void case2_malformedStoredDurationViaString_returnsDefaultWithParseError() throws Exception {
-    // openfeature.yaml Case 2, malformed-duration case. A well-formed duration read with
-    // getStringValue stays TYPE_MISMATCH (durations are native-only in this provider).
     QuonfigProvider provider = newDatadirProvider();
     assertErrorEval(
         provider.getStringEvaluation("test.duration.malformed.30s", "PT0S", null),
         "PT0S",
         ErrorCode.PARSE_ERROR);
+    provider.shutdown();
+  }
+
+  @Test
+  void case2_envVarProvidedDurationViaString() throws Exception {
+    QuonfigProvider provider =
+        newDatadirProvider(
+            Map.of("QUONFIG_ITD_DURATION_PT1_5S", "PT1.5S", "QUONFIG_ITD_DURATION_30S", "30s"));
+    ProviderEvaluation<String> ok =
+        provider.getStringEvaluation("provided.duration.PT1.5S", "PT0S", null);
+    assertEquals("PT1.5S", ok.getValue());
+    assertEquals(Reason.STATIC.name(), ok.getReason());
+    assertEquals(null, ok.getErrorCode());
     assertErrorEval(
-        provider.getStringEvaluation("test.duration.PT90S", "PT0S", null),
+        provider.getStringEvaluation("provided.duration.malformed.30s", "PT0S", null),
         "PT0S",
+        ErrorCode.PARSE_ERROR);
+    provider.shutdown();
+  }
+
+  @Test
+  void case2_durationViaNonStringReads_staysTypeMismatch() throws Exception {
+    QuonfigProvider provider = newDatadirProvider();
+    assertErrorEval(
+        provider.getDoubleEvaluation("test.duration.PT90S", 1.0, null), 1.0, ErrorCode.TYPE_MISMATCH);
+    assertErrorEval(
+        provider.getIntegerEvaluation("test.duration.PT90S", 1, null), 1, ErrorCode.TYPE_MISMATCH);
+    Value def = new Value("d");
+    assertErrorEval(
+        provider.getObjectEvaluation("test.duration.PT90S", def, null),
+        def,
         ErrorCode.TYPE_MISMATCH);
     provider.shutdown();
   }

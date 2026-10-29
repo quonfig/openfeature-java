@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.2.0 - 2026-10-29
+
+### Fixed
+
+- **`getStringValue` on a `duration` config returns its stored ISO 8601 text again** (qfg-177f):
+  `"PT90S"` stays `"PT90S"` and `"P1DT6H2M1.5S"` is unchanged, with reason `STATIC`, or
+  `TARGETING_MATCH`/`SPLIT` when a rule picks it, plus the usual variant and flag metadata. This
+  matches openfeature-go and the shared OpenFeature cases (integration-test-data
+  `tests/openfeature/openfeature.yaml` Case 2). 3.0 and 3.1 returned your default with
+  `TYPE_MISMATCH`. A malformed stored duration (`"30s"`) still returns your default with
+  `PARSE_ERROR`. `getDoubleValue`, `getIntegerValue` and `getObjectValue` on a duration still
+  return your default with `TYPE_MISMATCH`; use `getClient().getDuration()` for a
+  `java.time.Duration`.
+
+### Dependencies
+
+- Requires `com.quonfig:sdk-java` 2.3.0 (was 2.2.0), for its untyped `evaluateDetails` read.
+
+### Implementation
+
+A string read calls `getStringDetails` as before. When that reports `TYPE_MISMATCH`, the provider
+calls `evaluateDetails` once; if the config's stored type is `duration`, it validates the text with
+`java.time.Duration.parse` and returns it, or `PARSE_ERROR`. sdk-java's type check rejects the
+duration before evaluating, so each string read is still one evaluation and one telemetry record.
+
 ## 3.1.0 - 2026-10-28
 
 A value that has the requested type but cannot be parsed now returns your default with reason

@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:3.1.0")
+    implementation("com.quonfig:openfeature-server-java:3.2.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
@@ -20,7 +20,7 @@ Maven:
 <dependency>
   <groupId>com.quonfig</groupId>
   <artifactId>openfeature-server-java</artifactId>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
 </dependency>
 <dependency>
   <groupId>dev.openfeature</groupId>
@@ -120,7 +120,7 @@ java.time.Duration ttl = nativeClient.getDuration("cache.ttl", java.time.Duratio
 | `double`      | `getIntegerValue`      | Only a whole number within +/-(2^53-1) and the `int` range (`3.0` -> `3`); `3.9` returns your default |
 | `string_list` | `getObjectValue`       | Returns a `Value` list               |
 | `json`        | `getObjectValue`       | Returns a parsed `Value` tree        |
-| `duration`    | N/A                    | Native SDK only: `getClient().getDuration()` |
+| `duration`    | `getStringValue`       | The stored ISO 8601 text, unchanged (`"PT90S"`); `getClient().getDuration()` for a `java.time.Duration` |
 | `log_level`   | N/A                    | Native SDK only                      |
 
 Object evaluation tries `string_list` first, then JSON (same precedence as the
@@ -129,7 +129,7 @@ Go provider).
 ### Typed-getter contract
 
 The provider follows the typed-getter contract shared by every Quonfig SDK
-(sdk-java 2.2.0). Reading a flag with the method for another type returns your
+(sdk-java 2.2.0+). Reading a flag with the method for another type returns your
 default with reason `ERROR` and error code `TYPE_MISMATCH`, and sdk-java logs one
 WARN per key. Strings are never coerced: a stored `"true"` is not a boolean, a
 stored `"3"` is not a number, and an int or bool config is not a string. Numbers
@@ -137,7 +137,8 @@ convert only when the result is exact (see the table above). A value of the
 right type that cannot be parsed returns your default with reason `ERROR` and
 error code `PARSE_ERROR`: a malformed stored int or double (`"twelve"`, `"abc"`),
 an int or double provided by an ENV_VAR set to an unparseable string, or a
-malformed stored duration (`"30s"`) read with `getStringValue`. That is a data
+malformed stored duration (`"30s"`) read with `getStringValue`. A well-formed
+duration read with `getStringValue` returns its stored ISO 8601 text. That is a data
 problem; `TYPE_MISMATCH` is a caller problem. An unset ENV_VAR returns your
 default with `GENERAL`.
 
@@ -214,10 +215,12 @@ The OpenFeature spec covers common flag types. Some Quonfig-native features
 require the native SDK directly (via `getClient()`):
 
 1. **Log levels** (`shouldLog`, `getLogLevel`) — native SDK only.
-2. **`duration` configs** are native-only: use `getClient().getDuration()` for a
-   `java.time.Duration`. `getStringValue()` on a duration config returns your
-   default with `TYPE_MISMATCH` (before 3.0.0 it returned the ISO 8601 text),
-   or `PARSE_ERROR` if the stored duration is malformed.
+2. **Parsed `duration` values**: `getStringValue()` on a duration config
+   returns its stored ISO 8601 text (`"PT90S"`, never re-normalized), with
+   reason `STATIC`, or `TARGETING_MATCH`/`SPLIT` when a rule picks it. A
+   malformed stored duration returns your default with `PARSE_ERROR`. For a
+   `java.time.Duration`, use `getClient().getDuration()`. (3.0 and 3.1 returned
+   your default with `TYPE_MISMATCH` here.)
 3. **`keys()`** and raw config access — native SDK only.
 4. Context keys must use dot-notation (`"user.email"`, not nested objects).
 5. `targetingKey` maps to `user.id` by default.
