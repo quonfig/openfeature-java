@@ -6,6 +6,7 @@ import com.quonfig.sdk.Options;
 import com.quonfig.sdk.Quonfig;
 import com.quonfig.sdk.eval.ContextSet;
 import com.quonfig.sdk.eval.Murmur3WeightedValueResolver;
+import com.quonfig.sdk.eval.ValueType;
 import com.quonfig.sdk.exceptions.QuonfigCoercionException;
 import com.quonfig.sdk.exceptions.QuonfigInitException;
 import dev.openfeature.sdk.ErrorCode;
@@ -243,13 +244,20 @@ public class QuonfigProvider extends EventProvider {
     }
     ContextSet qCtx = ContextMapper.mapContext(ctx, options.targetingKeyMapping());
     EvaluationDetails<String> d = c.getStringDetails(key, defaultValue, qCtx);
-    if (d.errorCode() != null || d.value() == null) {
-      // Durations are native-only, so a duration config read here is TYPE_MISMATCH, unless its
-      // stored value does not parse: that is PARSE_ERROR (openfeature.yaml Case 2).
-      return buildFailure(
-          key, "duration", defaultValue, d, () -> c.getDurationOrThrow(key, qCtx));
+    if (d.errorCode() == null && d.value() != null) {
+      return build(d.value(), d);
     }
-    return build(d.value(), d);
+    if (d.errorCode() == com.quonfig.sdk.ErrorCode.TYPE_MISMATCH) {
+      // A duration config read as a string returns its stored ISO 8601 text (openfeature.yaml
+      // Case 2, openfeature-go's stringOf). getStringDetails rejects a duration at its type check,
+      // before evaluating, so it records no evaluation telemetry; the untyped read below is the
+      // one evaluation (and one telemetry record) for this call.
+      EvaluationDetails<Object> raw = c.evaluateDetails(key, qCtx);
+      if (raw.valueType() == ValueType.DURATION) {
+        return durationAsString(key, defaultValue, raw);
+      }
+    }
+    return build(defaultValue, d);
   }
 
   @Override
@@ -326,9 +334,9 @@ public class QuonfigProvider extends EventProvider {
   }
 
   /**
-   * Returns the underlying native Quonfig client for features not exposed via OpenFeature (duration
-   * values, log levels, {@code keys()}, raw config access). Returns {@code null} before {@link
-   * #initialize(EvaluationContext)} has completed.
+   * Returns the underlying native Quonfig client for features not exposed via OpenFeature (parsed
+   * {@code java.time.Duration} values, log levels, {@code keys()}, raw config access). Returns
+   * {@code null} before {@link #initialize(EvaluationContext)} has completed.
    */
   public Quonfig getClient() {
     return this.client;
@@ -363,6 +371,35 @@ public class QuonfigProvider extends EventProvider {
       // The message names the key, never the value.
       result.setErrorMessage("config \"" + key + "\" has a malformed " + type + " value");
     }
+    return result;
+  }
+
+  /**
+   * Maps an untyped read of a duration config to a string result: well-formed ISO 8601 text is
+   * returned exactly as stored (never re-normalized, so "PT90S" stays "PT90S") with the
+   * evaluation's reason, variant and metadata; a stored or ENV_VAR value that does not parse as a
+   * duration is the caller's default with {@code PARSE_ERROR}.
+   */
+  private static ProviderEvaluation<String> durationAsString(
+      String key, String defaultValue, EvaluationDetails<Object> raw) {
+    if (raw.errorCode() == null && raw.value() instanceof String) {
+      String text = (String) raw.value();
+      try {
+        java.time.Duration.parse(text);
+        return build(text, raw);
+      } catch (java.time.DateTimeException e) {
+        // fall through to PARSE_ERROR
+      }
+    } else if (raw.errorCode() != com.quonfig.sdk.ErrorCode.TYPE_MISMATCH) {
+      // Not a parse problem (no value matched, evaluation failure): pass the SDK result through.
+      return build(defaultValue, raw);
+    }
+    ProviderEvaluation<String> result = build(defaultValue, raw);
+    result.setVariant("default");
+    result.setReason(dev.openfeature.sdk.Reason.ERROR.name());
+    result.setErrorCode(ErrorCode.PARSE_ERROR);
+    // The message names the key, never the value.
+    result.setErrorMessage("config \"" + key + "\" has a malformed duration value");
     return result;
   }
 

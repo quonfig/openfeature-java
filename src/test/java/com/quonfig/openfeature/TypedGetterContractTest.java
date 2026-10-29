@@ -148,10 +148,10 @@ class TypedGetterContractTest {
   }
 
   @Test
-  void string_onDuration_returnsDefault() {
-    // Durations have no OpenFeature read path: use getClient().getDuration(). sdk-java 2.1 returned
-    // the ISO-8601 text ("PT30S") here.
-    assertTypeMismatch(client.getStringDetails("getter.contract.duration", "PT5S"), "PT5S");
+  void string_onDuration_returnsStoredIsoText() {
+    // A duration read as a string is its stored ISO 8601 text (openfeature.yaml Case 2, qfg-177f),
+    // as in openfeature-go. 3.0 and 3.1 returned the default with TYPE_MISMATCH.
+    assertResolved(client.getStringDetails("getter.contract.duration", "PT5S"), "PT30S");
   }
 
   @Test
