@@ -15,6 +15,14 @@ repositories {
     mavenCentral()
 }
 
+// Lock every resolved configuration to gradle.lockfile so ssdlc / deps (osv-scanner) can see the
+// exact dependency tree (qfg-66ko.19). Locking only pins this repo's own builds: the published POM
+// and Gradle module metadata still carry the declared versions, so consumers resolve as before.
+// Refresh after a dependency change with: ./gradlew dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))

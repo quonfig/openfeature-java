@@ -1,5 +1,36 @@
 # Changelog
 
+## 3.3.0 - 2026-10-29
+
+### Added
+
+- **`PARSE_ERROR` from sdk-java passes straight through** (qfg-wg1n). An upcoming sdk-java
+  reports an unparseable value (a malformed stored int, double or duration, or an ENV_VAR value
+  that does not parse) as `PARSE_ERROR` in its details API. The provider now maps that code to
+  OpenFeature `PARSE_ERROR` instead of `GENERAL`. With sdk-java 2.3.0, which reports these as
+  `TYPE_MISMATCH`, the provider still re-reads and reports `PARSE_ERROR`, as in 3.1.0. Results are
+  the same with either SDK.
+
+### Fixed
+
+- **`getObjectValue` on a `json` config no longer logs a misleading WARN** (qfg-tzby). The
+  provider used to try the `string_list` getter first, which logged sdk-java's once-per-key
+  "returned no value ... is JSON, caller expected STRING_LIST" WARN even though the read then
+  succeeded. It now reads the config once with `evaluateDetails` and picks `string_list` or `json`
+  from the stored type. Values, reasons and variants are unchanged. Two edge cases differ:
+  - a `string_list` config whose evaluation fails now reports the SDK's error code (for example
+    `GENERAL`), not `TYPE_MISMATCH`;
+  - an object read of a config of another type still returns your default with `TYPE_MISMATCH`
+    and the sdk-java WARN, and now counts as one evaluation in telemetry.
+
+### Build
+
+- Gradle dependency locking is on and `gradle.lockfile` is committed, so the SSDLC dependency
+  scan sees the resolved tree (qfg-66ko.19). This affects only this repo's builds. The published
+  POM and Gradle module metadata are unchanged, so your build resolves the same versions.
+
+No dependency change: still `com.quonfig:sdk-java` 2.3.0.
+
 ## 3.2.0 - 2026-10-29
 
 ### Fixed

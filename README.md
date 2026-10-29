@@ -9,7 +9,7 @@ Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("com.quonfig:openfeature-server-java:3.2.0")
+    implementation("com.quonfig:openfeature-server-java:3.3.0")
     implementation("dev.openfeature:sdk:1.20.2")
 }
 ```
@@ -20,7 +20,7 @@ Maven:
 <dependency>
   <groupId>com.quonfig</groupId>
   <artifactId>openfeature-server-java</artifactId>
-  <version>3.2.0</version>
+  <version>3.3.0</version>
 </dependency>
 <dependency>
   <groupId>dev.openfeature</groupId>
@@ -123,8 +123,9 @@ java.time.Duration ttl = nativeClient.getDuration("cache.ttl", java.time.Duratio
 | `duration`    | `getStringValue`       | The stored ISO 8601 text, unchanged (`"PT90S"`); `getClient().getDuration()` for a `java.time.Duration` |
 | `log_level`   | N/A                    | Native SDK only                      |
 
-Object evaluation tries `string_list` first, then JSON (same precedence as the
-Go provider).
+Object evaluation reads the config once and returns a `string_list` as a `Value`
+list and a `json` value as a `Value` tree. Any other type returns your default
+with `TYPE_MISMATCH`.
 
 ### Typed-getter contract
 
@@ -141,11 +142,6 @@ malformed stored duration (`"30s"`) read with `getStringValue`. A well-formed
 duration read with `getStringValue` returns its stored ISO 8601 text. That is a data
 problem; `TYPE_MISMATCH` is a caller problem. An unset ENV_VAR returns your
 default with `GENERAL`.
-
-Known issue: the first `getObjectValue` on a `json` config logs one sdk-java
-WARN for that key (`read of "<key>" returned no value ...`, "is JSON, caller
-expected STRING_LIST"), although the read succeeds. It comes from the
-`string_list` probe above and does not affect the value.
 
 ## Reason and error mapping
 
@@ -165,9 +161,11 @@ throws — on error or a null value the caller's default is returned with the
 error code/message populated on the `ProviderEvaluation`.
 
 Error codes map: `FLAG_NOT_FOUND` -> `FLAG_NOT_FOUND`, `TYPE_MISMATCH` ->
-`TYPE_MISMATCH`, `PROVIDER_NOT_READY` -> `PROVIDER_NOT_READY`, `GENERAL` ->
-`GENERAL`. sdk-java reports a value that does not parse as `TYPE_MISMATCH`; the
-provider reports it as `PARSE_ERROR` (see "Typed-getter contract"). Calls made before the provider is initialized, or while no config has
+`TYPE_MISMATCH`, `PROVIDER_NOT_READY` -> `PROVIDER_NOT_READY`, `PARSE_ERROR` ->
+`PARSE_ERROR`, `GENERAL` -> `GENERAL`. sdk-java 2.3 reports a value that does not
+parse as `TYPE_MISMATCH`; the provider reports it as `PARSE_ERROR` (see
+"Typed-getter contract"). A newer sdk-java that reports `PARSE_ERROR` itself is
+passed straight through. Calls made before the provider is initialized, or while no config has
 loaded yet (see "Init failure"), return the default with `PROVIDER_NOT_READY`.
 
 ## Init failure
