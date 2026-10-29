@@ -23,12 +23,6 @@
   - an object read of a config of another type still returns your default with `TYPE_MISMATCH`
     and the sdk-java WARN, and now counts as one evaluation in telemetry.
 
-### Build
-
-- Gradle dependency locking is on and `gradle.lockfile` is committed, so the SSDLC dependency
-  scan sees the resolved tree (qfg-66ko.19). This affects only this repo's builds. The published
-  POM and Gradle module metadata are unchanged, so your build resolves the same versions.
-
 No dependency change: still `com.quonfig:sdk-java` 2.3.0.
 
 ## 3.2.0 - 2026-10-29
