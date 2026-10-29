@@ -59,14 +59,26 @@ final class Mappings {
     if (code == null) {
       return null;
     }
-    switch (code) {
-      case FLAG_NOT_FOUND:
+    return errorCodeForName(code.name());
+  }
+
+  /**
+   * Maps a Quonfig error code, by its enum constant name, to an OpenFeature {@link ErrorCode}.
+   * Matching by name rather than by constant keeps this compiling against every supported sdk-java
+   * release, including ones whose {@code ErrorCode} enum lacks a newer constant.
+   */
+  static ErrorCode errorCodeForName(String name) {
+    switch (name) {
+      case "FLAG_NOT_FOUND":
         return ErrorCode.FLAG_NOT_FOUND;
-      case TYPE_MISMATCH:
+      case "TYPE_MISMATCH":
         return ErrorCode.TYPE_MISMATCH;
-      case PROVIDER_NOT_READY:
+      case "PROVIDER_NOT_READY":
         return ErrorCode.PROVIDER_NOT_READY;
-      case GENERAL:
+      case "PARSE_ERROR":
+        // A newer sdk-java reports an unparseable value directly (qfg-wg1n); pass it through.
+        return ErrorCode.PARSE_ERROR;
+      case "GENERAL":
       default:
         return ErrorCode.GENERAL;
     }

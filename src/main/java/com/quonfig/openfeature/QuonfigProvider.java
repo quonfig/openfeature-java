@@ -316,21 +316,33 @@ public class QuonfigProvider extends EventProvider {
     }
     ContextSet qCtx = ContextMapper.mapContext(ctx, options.targetingKeyMapping());
 
-    // Try string_list first (mirrors the Go provider), then JSON.
-    EvaluationDetails<List<String>> listDetails = c.getStringListDetails(key, null, qCtx);
-    if (listDetails.errorCode() == null && listDetails.value() != null) {
-      List<Value> values = new ArrayList<>(listDetails.value().size());
-      for (String s : listDetails.value()) {
-        values.add(new Value(s));
+    // One untyped read, then pick the shape from the config's stored type (qfg-tzby). Trying the
+    // typed getters in turn would log sdk-java's once-per-key type-mismatch WARN for a json config
+    // that the provider then returns.
+    EvaluationDetails<Object> raw = c.evaluateDetails(key, qCtx);
+    ValueType vt = raw.valueType();
+    if (vt == ValueType.STRING_LIST || vt == ValueType.JSON) {
+      if (raw.errorCode() != null || raw.value() == null) {
+        return build(defaultValue, raw);
       }
-      return build(new Value(values), listDetails);
+      if (vt == ValueType.STRING_LIST && raw.value() instanceof List) {
+        List<?> list = (List<?>) raw.value();
+        List<Value> values = new ArrayList<>(list.size());
+        for (Object s : list) {
+          values.add(new Value(String.valueOf(s)));
+        }
+        return build(new Value(values), raw);
+      }
+      return build(jsonToValue(raw.value(), defaultValue), raw);
     }
-
+    if (raw.errorCode() != null && vt == null) {
+      // Not found, not ready, closed or an evaluation failure: the SDK result as-is.
+      return build(defaultValue, raw);
+    }
+    // Not an object type: the typed json read reports the caller's TYPE_MISMATCH (and its WARN).
+    // It fails at the SDK's type check, before evaluating.
     EvaluationDetails<Object> jsonDetails = c.getJsonDetails(key, null, qCtx);
-    if (jsonDetails.errorCode() != null || jsonDetails.value() == null) {
-      return build(defaultValue, jsonDetails);
-    }
-    return build(jsonToValue(jsonDetails.value(), defaultValue), jsonDetails);
+    return build(defaultValue, jsonDetails);
   }
 
   /**
