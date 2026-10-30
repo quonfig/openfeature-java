@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.3.1 - 2026-10-30
+
+Security patch for runtime dependencies (qfg-66ko.19). No API or behaviour change.
+
+### Changed
+
+- **Now depends on `com.quonfig:sdk-java` 2.4.1** (was 2.3.0). This brings in guava 33.7.2-jre
+  (GHSA-xxph-c9ww-hj94) and jackson 2.18.12. Results are the same as with 2.3.0: an unparseable
+  value is still reported as `PARSE_ERROR`, which sdk-java now reports itself.
+- **jackson-databind 2.18.2 -> 2.18.12.** Clears 8 HIGH advisories in jackson-core and
+  jackson-databind.
+- These raise the minimum sdk-java, jackson and guava versions your build pulls in. Floor raise
+  approved by Jeff (qfg-66ko.19, 2026-10-29).
+
+### Build
+
+- Gradle dependency locking is on and `gradle.lockfile` is committed, so the SSDLC dependency scan
+  sees the resolved tree. It pins only this repo's builds; the published POM is unchanged apart from
+  the version bumps above.
+
 ## 3.3.0 - 2026-10-29
 
 ### Added
