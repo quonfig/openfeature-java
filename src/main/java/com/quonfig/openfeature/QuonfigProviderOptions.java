@@ -40,7 +40,7 @@ public final class QuonfigProviderOptions {
     return datadir;
   }
 
-  /** Which environment to evaluate (e.g. {@code "Production"}). */
+  /** Which environment to evaluate (e.g. {@code "production"}). */
   public String environment() {
     return environment;
   }
