@@ -92,7 +92,7 @@ makes no network calls.
 QuonfigProvider provider = new QuonfigProvider(
     QuonfigProviderOptions.builder()
         .datadir("/path/to/workspace")
-        .environment("Production")
+        .environment("production")
         .build());
 ```
 
