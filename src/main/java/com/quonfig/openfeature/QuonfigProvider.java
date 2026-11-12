@@ -7,7 +7,6 @@ import com.quonfig.sdk.Quonfig;
 import com.quonfig.sdk.eval.ContextSet;
 import com.quonfig.sdk.eval.Murmur3WeightedValueResolver;
 import com.quonfig.sdk.eval.ValueType;
-import com.quonfig.sdk.exceptions.QuonfigCoercionException;
 import com.quonfig.sdk.exceptions.QuonfigInitException;
 import dev.openfeature.sdk.ErrorCode;
 import dev.openfeature.sdk.EvaluationContext;
@@ -272,7 +271,7 @@ public class QuonfigProvider extends EventProvider {
     Long def = defaultValue == null ? null : defaultValue.longValue();
     EvaluationDetails<Long> d = c.getIntDetails(key, def, qCtx);
     if (d.errorCode() != null || d.value() == null) {
-      return buildFailure(key, "int", defaultValue, d, () -> c.getLongOrThrow(key, qCtx));
+      return build(defaultValue, d);
     }
     long v = d.value();
     if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
@@ -302,7 +301,7 @@ public class QuonfigProvider extends EventProvider {
     ContextSet qCtx = ContextMapper.mapContext(ctx, options.targetingKeyMapping());
     EvaluationDetails<Double> d = c.getDoubleDetails(key, defaultValue, qCtx);
     if (d.errorCode() != null || d.value() == null) {
-      return buildFailure(key, "double", defaultValue, d, () -> c.getDoubleOrThrow(key, qCtx));
+      return build(defaultValue, d);
     }
     return build(d.value(), d);
   }
@@ -368,43 +367,24 @@ public class QuonfigProvider extends EventProvider {
   }
 
   /**
-   * Builds the result for a failed typed read. sdk-java's details API reports both a wrong-type
-   * read and a value of the right type that does not parse as {@code TYPE_MISMATCH}; only its
-   * {@code get*OrThrow} family tells them apart, with {@link QuonfigCoercionException} for the
-   * latter. So on {@code TYPE_MISMATCH} the provider re-reads through {@code probe} (the matching
-   * {@code get*OrThrow}) and reports a coercion failure as {@code PARSE_ERROR} (qfg-9xsl), the same
-   * split openfeature-go makes. The probe runs only on this error path.
-   */
-  private static <T> ProviderEvaluation<T> buildFailure(
-      String key, String type, T defaultValue, EvaluationDetails<?> d, Runnable probe) {
-    ProviderEvaluation<T> result = build(defaultValue, d);
-    if (d.errorCode() == com.quonfig.sdk.ErrorCode.TYPE_MISMATCH && isUnparseable(probe)) {
-      result.setErrorCode(ErrorCode.PARSE_ERROR);
-      // The message names the key, never the value.
-      result.setErrorMessage("config \"" + key + "\" has a malformed " + type + " value");
-    }
-    return result;
-  }
-
-  /**
    * Maps an untyped read of a duration config to a string result: well-formed ISO 8601 text is
    * returned exactly as stored (never re-normalized, so "PT90S" stays "PT90S") with the
-   * evaluation's reason, variant and metadata; a stored or ENV_VAR value that does not parse as a
-   * duration is the caller's default with {@code PARSE_ERROR}.
+   * evaluation's reason, variant and metadata. An SDK error (including sdk-java's own {@code
+   * PARSE_ERROR} for an ENV_VAR value that is not a duration) passes straight through. The untyped
+   * read does not parse a stored duration, so a stored value that is not ISO 8601 is checked here
+   * and is the caller's default with {@code PARSE_ERROR}.
    */
   private static ProviderEvaluation<String> durationAsString(
       String key, String defaultValue, EvaluationDetails<Object> raw) {
-    if (raw.errorCode() == null && raw.value() instanceof String) {
-      String text = (String) raw.value();
-      try {
-        java.time.Duration.parse(text);
-        return build(text, raw);
-      } catch (java.time.DateTimeException e) {
-        // fall through to PARSE_ERROR
-      }
-    } else if (raw.errorCode() != com.quonfig.sdk.ErrorCode.TYPE_MISMATCH) {
-      // Not a parse problem (no value matched, evaluation failure): pass the SDK result through.
+    if (raw.errorCode() != null || !(raw.value() instanceof String)) {
       return build(defaultValue, raw);
+    }
+    String text = (String) raw.value();
+    try {
+      java.time.Duration.parse(text);
+      return build(text, raw);
+    } catch (java.time.DateTimeException e) {
+      // fall through to PARSE_ERROR
     }
     ProviderEvaluation<String> result = build(defaultValue, raw);
     result.setVariant("default");
@@ -413,17 +393,6 @@ public class QuonfigProvider extends EventProvider {
     // The message names the key, never the value.
     result.setErrorMessage("config \"" + key + "\" has a malformed duration value");
     return result;
-  }
-
-  private static boolean isUnparseable(Runnable probe) {
-    try {
-      probe.run();
-      return false;
-    } catch (QuonfigCoercionException e) {
-      return true;
-    } catch (RuntimeException e) {
-      return false;
-    }
   }
 
   private static <T> ProviderEvaluation<T> notReady(T defaultValue) {

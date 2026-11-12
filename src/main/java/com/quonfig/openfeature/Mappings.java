@@ -55,30 +55,28 @@ final class Mappings {
    * {@code null} when there is no error.
    */
   static ErrorCode errorCodeFor(EvaluationDetails<?> details) {
-    com.quonfig.sdk.ErrorCode code = details.errorCode();
-    if (code == null) {
-      return null;
-    }
-    return errorCodeForName(code.name());
+    return errorCodeFor(details.errorCode());
   }
 
   /**
-   * Maps a Quonfig error code, by its enum constant name, to an OpenFeature {@link ErrorCode}.
-   * Matching by name rather than by constant keeps this compiling against every supported sdk-java
-   * release, including ones whose {@code ErrorCode} enum lacks a newer constant.
+   * Maps each Quonfig error code to its OpenFeature equivalent, one to one. sdk-java 2.4.0+ reports
+   * an unparseable value as {@code PARSE_ERROR} itself (qfg-wg1n), so it passes straight through
+   * (qfg-ln7d). Returns {@code null} for no error.
    */
-  static ErrorCode errorCodeForName(String name) {
-    switch (name) {
-      case "FLAG_NOT_FOUND":
+  static ErrorCode errorCodeFor(com.quonfig.sdk.ErrorCode code) {
+    if (code == null) {
+      return null;
+    }
+    switch (code) {
+      case FLAG_NOT_FOUND:
         return ErrorCode.FLAG_NOT_FOUND;
-      case "TYPE_MISMATCH":
+      case TYPE_MISMATCH:
         return ErrorCode.TYPE_MISMATCH;
-      case "PROVIDER_NOT_READY":
+      case PROVIDER_NOT_READY:
         return ErrorCode.PROVIDER_NOT_READY;
-      case "PARSE_ERROR":
-        // A newer sdk-java reports an unparseable value directly (qfg-wg1n); pass it through.
+      case PARSE_ERROR:
         return ErrorCode.PARSE_ERROR;
-      case "GENERAL":
+      case GENERAL:
       default:
         return ErrorCode.GENERAL;
     }

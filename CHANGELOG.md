@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.4.0 - 2026-11-12
+
+Drops the pre-`PARSE_ERROR` workaround (qfg-ln7d). Results are the same as 3.3.1.
+
+### Changed
+
+- **Requires `com.quonfig:sdk-java` 2.4.0 or later**, the first release whose details API reports
+  an unparseable value as `PARSE_ERROR` itself (qfg-wg1n). The declared dependency stays 2.4.1, as
+  in 3.3.1. 3.3.x still worked if your build forced sdk-java down to 2.3.0; 3.4.0 does not support
+  that, so this is a minor release.
+- **`PARSE_ERROR` maps straight through from the SDK.** The provider no longer re-reads a failed
+  int or double through `getLongOrThrow`/`getDoubleOrThrow` to tell a malformed value from a wrong
+  type. It reports sdk-java's error code and message unchanged, and maps each sdk-java `ErrorCode`
+  to OpenFeature by constant instead of by name. With sdk-java 2.4.x that re-read never ran, so
+  values, reasons, error codes and messages are unchanged.
+- A duration config read with `getStringValue` passes any SDK error through as-is, including
+  sdk-java's `PARSE_ERROR` for an ENV_VAR value that is not a duration. A stored value that is not
+  ISO 8601 is still your default with `PARSE_ERROR`.
+
 ## 3.3.1 - 2026-10-30
 
 Security patch for runtime dependencies (qfg-66ko.19). No API or behaviour change.
