@@ -345,6 +345,36 @@ class QuonfigProviderTest {
     provider.shutdown();
   }
 
+  // sdk-java >= 2.4.0 reports PARSE_ERROR itself (qfg-wg1n), so the provider maps the SDK's
+  // details straight through (qfg-ln7d): same code, same message, no get*OrThrow re-read.
+  @Test
+  void case6_parseError_comesStraightFromSdkDetails() throws Exception {
+    QuonfigProvider provider =
+        newDatadirProvider(
+            Map.of("QUONFIG_ITD_GETTER_INT", "twelve", "QUONFIG_ITD_GETTER_DOUBLE", "abc"));
+    try {
+      com.quonfig.sdk.EvaluationDetails<Long> sdkInt =
+          provider.getClient().getIntDetails("getter.contract.provided.int.malformed", 7L, null);
+      assertEquals(com.quonfig.sdk.ErrorCode.PARSE_ERROR, sdkInt.errorCode());
+      ProviderEvaluation<Integer> ofInt =
+          provider.getIntegerEvaluation("getter.contract.provided.int.malformed", 7, null);
+      assertErrorEval(ofInt, 7, ErrorCode.PARSE_ERROR);
+      assertEquals(sdkInt.errorMessage(), ofInt.getErrorMessage());
+
+      com.quonfig.sdk.EvaluationDetails<Double> sdkDouble =
+          provider
+              .getClient()
+              .getDoubleDetails("getter.contract.provided.double.malformed", 1.5, null);
+      assertEquals(com.quonfig.sdk.ErrorCode.PARSE_ERROR, sdkDouble.errorCode());
+      ProviderEvaluation<Double> ofDouble =
+          provider.getDoubleEvaluation("getter.contract.provided.double.malformed", 1.5, null);
+      assertErrorEval(ofDouble, 1.5, ErrorCode.PARSE_ERROR);
+      assertEquals(sdkDouble.errorMessage(), ofDouble.getErrorMessage());
+    } finally {
+      provider.shutdown();
+    }
+  }
+
   @Test
   void case6_intConfigViaBoolean_returnsDefaultWithTypeMismatch() throws Exception {
     QuonfigProvider provider = newDatadirProvider();
